@@ -1,10 +1,10 @@
 # 📖 LibMonetColor-1.0 API Reference
 
-> **版本**: 1.0.0 (Phase 1 核心算法) | **协议**: MIT | **依赖**: `LibStub`, `CallbackHandler-1.0`
+> **版本**: 1.0.0 (Phase 1 核心算法 + 加固) | **协议**: MIT | **依赖**: `LibStub`, `CallbackHandler-1.0`
 > 
 > **定位**：WoW 动态环境色彩计算引擎。它不是静态的颜色查找表，而是基于"印象派（莫奈）色彩规则"的实时调色中间件，为 UI 插件提供自适应的"5+3"主题色系统。
 > 
-> **Phase 1 状态**: 核心算法已实现，45 个单元测试全部通过。`sampleEnvironmentColor()` 当前为占位实现，Phase 2 将替换为真实地图色彩采样。
+> **Phase 1 状态**: 核心算法已实现，**45 个单元测试 + 11 个加固回归测试**全部通过。已完成加固：修正 LibStub 注册、修复 Profile 规则未生效、`GetEdgeColorForMap` 支持按地图采样、R-01 Alpha 自适应公式落地。`sampleEnvironmentColor()` 仍为占位实现，Phase 2（T2.1）将替换为真实地图色彩采样。
 
 ---
 
@@ -80,6 +80,17 @@ MyFrame:SetBackdropBorderColor(r, g, b, a)
 function LMC:GetCurrentAmbientTint()
 ```
 
+**Alpha 自适应公式（R-01 已决策，2026-10-15）**：
+
+```
+alpha = alphaMin + (alphaMax - alphaMin) * (1 - envL) * (1 - saturationGuard * envS)
+```
+
+- 环境越暗 → alpha 越高（氛围更浓）；环境越饱和 → alpha 越低（避免 UI 二次饱和）。
+- 结果钳制在 `[alphaMin, alphaMax]`，默认 `[0.15, 0.30]`。
+- 参数可在规则表的 `ambient` 字段覆盖：`{ alphaMin, alphaMax, saturationGuard }`。
+- 视觉验收（T2.3）待三地图实测后可能微调参数，公式本身冻结。
+
 **示例**：
 ```lua
 local r, g, b, a = LMC:GetCurrentAmbientTint()
@@ -146,10 +157,12 @@ local er, eg, eb, ea, ar, ag, ab, aa, hr, hg, hb, nr, ng, nb = LMC:GetAllThemeCo
 获取指定地图的边缘色（不改变当前缓存状态）。
 
 ```lua
--- @param mapID number  WoW 地图 ID
+-- @param mapID number  WoW 地图 ID（无效值回退当前地图）
 -- @return r, g, b, a  边缘色 RGBA
 function LMC:GetEdgeColorForMap(mapID)
 ```
+
+**行为**：若该地图已有缓存条目则直接读取；否则用环境采样器即时计算该地图的颜色，且**不写入**活动缓存。采样器可接收 `mapID` 参数（见 `SetEnvironmentSampler`）。
 
 ---
 
@@ -179,9 +192,12 @@ function LMC:SetDeltaEThreshold(threshold)
 设置环境色彩采样器（Phase 2 集成用）。
 
 ```lua
--- @param sampler function  返回 h, s, l 的函数
+-- @param sampler function(mapID)  返回 h, s, l 的函数；mapID 为可选参数
+-- @return boolean                  是否设置成功
 function LMC:SetEnvironmentSampler(sampler)
 ```
+
+采样器可忽略 `mapID`（简单实现），也可据此返回不同地图的颜色。设置成功后会**清空缓存并立即刷新**，必要时触发 `OnThemeColorsChanged`。
 
 ---
 
@@ -256,6 +272,8 @@ function LMC:GetActiveProfile()
 function LMC:GetRules()
 ```
 
+自定义 Profile 未提供的字段会自动用内置默认值补全（例如省略 `complementaryPairs` 则继承默认互补色对；显式传 `complementaryPairs = {}` 可关闭）。补全结果会被缓存。
+
 ---
 
 ### ClearCache
@@ -288,10 +306,13 @@ LMC:RegisterCallback("OnThemeColorsChanged", function(event, entry)
 end)
 ```
 
-**触发条件**：
-- 区域切换（ZONE_CHANGED / ZONE_CHANGED_INDOORS / ZONE_CHANGED_NEW_AREA）
-- 手动调用 `LMC:Refresh()`
-- 环境色彩 Delta E > 5.0（默认阈值）
+**触发条件**（以下任一，且**边缘色 Delta E > 阈值**时才会真正触发）：
+
+- 区域切换（ZONE_CHANGED / ZONE_CHANGED_INDOORS / ZONE_CHANGED_NEW_AREA / PLAYER_ENTERING_WORLD）
+- 手动调用 `LMC:Refresh()` 或 `LMC:SetEnvironmentSampler()` / `LMC:SetActiveProfile()`
+- 环境色彩 Delta E > 5.0（默认阈值，可用 `SetDeltaEThreshold` 调整）
+
+> 注意：`Refresh()` 是"强制重算"，但**事件仍受 Delta E 防抖约束**——若重算后颜色变化不足阈值则不发事件，以避免 UI 重绘风暴。
 
 ---
 
