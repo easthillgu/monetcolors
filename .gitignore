@@ -1,0 +1,17 @@
+# --- Large source paintings (Wikimedia Commons, public domain) ---
+# Re-downloadable; see Monet_Paintings/MANIFEST.md for inventory + SHA-256.
+Monet_Paintings/*.jpg
+Monet_Paintings/_backup_lowres/
+
+# --- Intermediate extraction artifacts ---
+# Only the v3 outputs are tracked (monet_palette_v3.json, monet_red_domain_v3.json).
+# These are upstream pipeline snapshots kept on disk for reference only.
+monet_palette_raw.json
+monet_palette_clean.json
+monet_palette_v2.json
+monet_red_domain.json
+monet_hue_domains.json
+
+# --- OS / editor cruft ---
+Thumbs.db
+Desktop.ini
