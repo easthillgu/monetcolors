@@ -90,7 +90,10 @@ local er, eg, eb, ea,   -- edge
 | `GetEdgeColorForMap(mapID)` | `r,g,b,a` | 指定地图的边缘色（不改动活动缓存） |
 | `Refresh()` | — | 强制重算当前地图（事件仍受防抖约束） |
 | `SetDeltaEThreshold(t)` | — | 设置事件触发阈值（默认 5.0） |
-| `SetEnvironmentSampler(fn)` | `bool` | 设置环境采样器 `fn(mapID) -> h,s,l` |
+| `GetMapEnv(mapID)` | `h,s,l,name,source` | 解析地图环境色：运行时覆盖 → 区域数据 → 父地图链 → 回退 |
+| `RegisterMapEnv(mapID,h,s,l,name?)` | `bool` | 运行时扩展/覆盖单个地图的环境色（优先于数据模块） |
+| `SetFallbackEnv(h,s,l)` | `bool` | 设置未收录地图的回退环境色（默认中性无彩） |
+| `SetEnvironmentSampler(fn)` | `bool` | 整体替换环境采样器（默认已内置，一般无需调用） |
 
 生产者 API：
 
@@ -136,6 +139,7 @@ local er, eg, eb, ea,   -- edge
 ```bash
 lua test_phase1.lua      # 45 个核心算法测试
 lua test_hardening.lua   # 11 个加固回归测试
+lua test_map_sampler.lua # 16 个 T2.1 地图采样测试
 ```
 
 VSCode 用户可直接运行任务：`Run Phase 1 Tests` / `Run Hardening Tests`。
@@ -143,11 +147,16 @@ VSCode 用户可直接运行任务：`Run Phase 1 Tests` / `Run Hardening Tests`
 ### 目录结构
 
 ```
-LibMonetColor-1.0.lua         核心库（单文件）
+LibMonetColor-1.0.lua         核心库（单文件，惰性加载可选地图数据）
+MonetColorMapData-1.0.lua     14 区域环境色数据模块（自动生成，勿手改）
 LibMonetColor-1.0-API.md      对外接口契约（唯一真理源）
 MonetColorBaseline.lua        v3 莫奈规则基线（7 域 + 6 互补色对）
 test_phase1.lua               核心算法单元测试
 test_hardening.lua            加固回归测试
+test_map_sampler.lua          T2.1 地图采样测试
+gen_map_env.ps1               JSON → 地图数据 Lua 模块生成器
+extract_game_palette_v1.ps1   游戏截图 → 区域调色板取色管线
+game_palette_v1.json          14 区域 × Top8 色样 + env（取色源数据）
 monet_palette_v3.json         15 幅画 × 8 色样（提取源数据）
 monet_red_domain_v3.json      Red/Warm 域专项色样
 Monet_Paintings/MANIFEST.md   原图清单（含尺寸与 SHA-256，原图不入库）
@@ -159,7 +168,8 @@ Monet_Paintings/MANIFEST.md   原图清单（含尺寸与 SHA-256，原图不入
 
 - ✅ **Phase 1** 核心算法（HSL 转换 / 莫奈规则引擎 / Delta E 缓存防抖 / 生产者 API）
 - ✅ **+ 加固** LibStub 注册、Profile 生效、按地图采样、R-01 Alpha 公式
-- 🔜 **Phase 2** 真实地图色彩采样（T2.1）、TestHarness 插件（T2.2）、三地图视觉验收（T2.3）
+- ✅ **Phase 2 (T2.1)** 真实地图色彩采样：`MonetColorMapData-1.0` 数据模块（14 区域，截图取色管线产出）+ 解析链（覆盖 → 数据 → 父地图 → 回退）+ 16 项测试
+- 🔜 **Phase 2** TestHarness 插件（T2.2）、三地图视觉验收（T2.3）
 - 🔜 **Phase 3** 发布与打包
 
 ---

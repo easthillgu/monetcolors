@@ -1,10 +1,10 @@
 # 📖 LibMonetColor-1.0 API Reference
 
-> **版本**: 1.0.0 (Phase 1 核心算法 + 加固) | **协议**: MIT | **依赖**: `LibStub`, `CallbackHandler-1.0`
+> **版本**: 1.0.1 (Phase 1 核心算法 + 加固 + Phase 2 T2.1 地图采样) | **协议**: MIT | **依赖**: `LibStub`, `CallbackHandler-1.0` | **可选数据**: `MonetColorMapData-1.0`
 > 
 > **定位**：WoW 动态环境色彩计算引擎。它不是静态的颜色查找表，而是基于"印象派（莫奈）色彩规则"的实时调色中间件，为 UI 插件提供自适应的"5+3"主题色系统。
 > 
-> **Phase 1 状态**: 核心算法已实现，**45 个单元测试 + 11 个加固回归测试**全部通过。已完成加固：修正 LibStub 注册、修复 Profile 规则未生效、`GetEdgeColorForMap` 支持按地图采样、R-01 Alpha 自适应公式落地。`sampleEnvironmentColor()` 仍为占位实现，Phase 2（T2.1）将替换为真实地图色彩采样。
+> **当前状态**: 核心算法已实现并加固，**45 个单元测试 + 11 个加固回归 + 16 个 T2.1 采样测试（共 72）**全部通过。Phase 2（T2.1）已完成：`sampleEnvironmentColor()` 默认实现为基于 `MonetColorMapData-1.0` 区域数据的查表采样器（14 区域，源自游戏截图取色管线），未知地图回退中性无彩 env 并走无彩域注入路径。
 
 ---
 
@@ -12,11 +12,12 @@
 1. [核心概念：5+3 色彩架构](#-核心概念53-色彩架构)
 2. [快速接入 (Quick Start)](#-快速接入-quick-start)
 3. [消费者 API (Consumer API)](#-消费者-api-consumer-api)
-4. [生产者 API (Producer API)](#-生产者-api-producer-api)
-5. [事件与回调 (Events & Callbacks)](#-事件与回调-events--callbacks)
-6. [数据结构定义 (Data Structures)](#-数据结构定义-data-structures)
-7. [契约、安全与降级机制](#️-契约安全与降级机制)
-8. [最佳实践与开发自查](#-最佳实践与开发自查)
+4. [环境取色数据与 API (Map Env API, T2.1)](#-环境取色数据与-api-map-env-api-t21)
+5. [生产者 API (Producer API)](#-生产者-api-producer-api)
+6. [事件与回调 (Events & Callbacks)](#-事件与回调-events--callbacks)
+7. [数据结构定义 (Data Structures)](#-数据结构定义-data-structures)
+8. [契约、安全与降级机制](#️-契约安全与降级机制)
+9. [最佳实践与开发自查](#-最佳实践与开发自查)
 
 ---
 
@@ -162,7 +163,7 @@ local er, eg, eb, ea, ar, ag, ab, aa, hr, hg, hb, nr, ng, nb = LMC:GetAllThemeCo
 function LMC:GetEdgeColorForMap(mapID)
 ```
 
-**行为**：若该地图已有缓存条目则直接读取；否则用环境采样器即时计算该地图的颜色，且**不写入**活动缓存。采样器可接收 `mapID` 参数（见 `SetEnvironmentSampler`）。
+**行为**：若该地图已有缓存条目则直接读取；否则用环境采样器即时计算该地图的颜色，且**不写入**活动缓存。默认采样器按 `mapID` 查 `MonetColorMapData-1.0` 区域数据（见 [Map Env API](#-环境取色数据与-api-map-env-api-t21)）。
 
 ---
 
@@ -189,7 +190,7 @@ function LMC:SetDeltaEThreshold(threshold)
 
 ### SetEnvironmentSampler
 
-设置环境色彩采样器（Phase 2 集成用）。
+设置环境色彩采样器。**默认采样器已内置**（T2.1）：基于 `MonetColorMapData-1.0` 区域数据按 `mapID` 查表；本 API 仅供接入方完全替换采样逻辑时使用。
 
 ```lua
 -- @param sampler function(mapID)  返回 h, s, l 的函数；mapID 为可选参数
@@ -198,6 +199,76 @@ function LMC:SetEnvironmentSampler(sampler)
 ```
 
 采样器可忽略 `mapID`（简单实现），也可据此返回不同地图的颜色。设置成功后会**清空缓存并立即刷新**，必要时触发 `OnThemeColorsChanged`。
+
+若只想**扩展个别地图**的数据，不要用本 API 重写整个采样器，请使用 `RegisterMapEnv`。
+
+---
+
+## 🗺️ 环境取色数据与 API (Map Env API, T2.1)
+
+默认采样器的数据来源是可选数据模块 **`MonetColorMapData-1.0`**：
+
+```lua
+-- 数据模块结构（自动生成，勿手改）
+MDM.MapEnv = {
+    [1413] = { name = "贫瘠之地", h = 47.0, s = 0.298, l = 0.395 },
+    -- ...
+}
+```
+
+*   **数据源**：`game_palette_v1.json` ← `extract_game_palette_v1.ps1`（游戏截图取色管线）← `gen_map_env.ps1`（生成本模块）。新增区域时重跑两条管线即可。
+*   **加载顺序无关**：库通过 `LibStub("MonetColorMapData-1.0", true)` 或全局别名 `LibMonetColorMapData` **惰性查找**，数据模块先于/后于库加载均可。
+*   **数据缺失安全**：数据模块不存在时库照常工作，所有未收录地图解析为 fallback env。
+
+### 解析顺序
+
+`GetMapEnv(mapID)` 按以下优先级解析，全程不抛错：
+
+1.  **运行时覆盖**（`RegisterMapEnv` 注册的条目）
+2.  **数据精确命中**（`MapEnv[mapID]`）
+3.  **父地图链**（游戏内经 `C_Map.GetMapInfo` 向上查找最多 5 级，子区域/副本地图继承父区域环境色；返回 `source = "parent:..."`)
+4.  **Fallback env**（默认 `{h=0, s=0, l=0.5}` 中性无彩 → 触发无彩域注入，输出安静的冷蓝 Edge Glow）
+
+### GetMapEnv
+
+解析指定地图的环境色 (h, s, l)。
+
+```lua
+-- @param mapID  number|nil  地图 ID（字符串会被容错转换；nil/0 → fallback）
+-- @return h, s, l, name|nil, source
+--         source: "override" | "data" | "parent:override" | "parent:data" | "fallback"
+function LMC:GetMapEnv(mapID)
+```
+
+调试建议：配合 `/lmctest` 打印 `select(5, LMC:GetMapEnv(mapID))` 可立刻看出当前地图走的哪条解析路径。
+
+### RegisterMapEnv
+
+运行时注册/覆盖单个地图的环境色。优先级高于数据模块，供接入方**逐区域扩展覆盖**（无需 fork 数据模块）。
+
+```lua
+-- @param mapID  number      > 0
+-- @param h      number      [0, 360]（自动 wrap）
+-- @param s      number      [0, 1]（自动 clamp）
+-- @param l      number      [0, 1]（自动 clamp）
+-- @param name   string|nil  区域名（调试输出用）
+-- @return boolean           是否注册成功（非法参数返回 false 并打印冷却警告）
+function LMC:RegisterMapEnv(mapID, h, s, l, name)
+```
+
+注册后**清空缓存并立即刷新**。
+
+### SetFallbackEnv
+
+设置未收录地图的回退环境色。
+
+```lua
+-- @param h, s, l numbers   语义同上
+-- @return boolean          是否设置成功
+function LMC:SetFallbackEnv(h, s, l)
+```
+
+默认 `{h=0, s=0, l=0.5}`（中性无彩，走无彩域注入）。设置后**清空缓存并立即刷新**。
 
 ---
 

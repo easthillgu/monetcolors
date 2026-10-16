@@ -24,13 +24,19 @@ $uiMask = @(
 $maskFiles = @("贫瘠之地.jpg", "贫瘠之地2.jpg", "泽风岛2.jpg")
 
 # ---- 区域定义 (mapID 取自 wuxianwow 图鉴, 经典 mapID 空间) ----
+# 注意: 闪光平原是千针石林的子区域, 游戏内 GetBestMapForUnit 同返回 1441, 故合并统计。
 $zones = @(
     @{ zone = "贫瘠之地";         mapID = 1413; files = @("贫瘠之地.jpg", "贫瘠之地2.jpg") }
     @{ zone = "阿拉希高地";       mapID = 1417; files = @("阿拉希高地.jpg", "阿拉希高地2.jpg") }
+    @{ zone = "提瑞斯法林地";     mapID = 1420; files = @("提瑞斯法林地.jpg", "提瑞斯法林地2.jpg") }
     @{ zone = "银松森林";         mapID = 1421; files = @("银松森林.jpg", "银松森林2.jpg", "银松森林3.jpg") }
     @{ zone = "希尔斯布莱德丘陵"; mapID = 1424; files = @("希尔斯布莱德丘陵.jpg", "希尔斯布莱德丘陵2.jpg") }
     @{ zone = "艾尔文森林";       mapID = 1429; files = @("艾尔文森林.jpg", "艾尔文森林2.jpg") }
     @{ zone = "西部荒野";         mapID = 1436; files = @("西部荒野.jpg", "西部荒野2.jpg", "西部荒野3.jpg") }
+    @{ zone = "灰谷";             mapID = 1440; files = @("灰谷.jpg", "灰谷2.jpg", "灰谷3.jpg", "灰谷4.jpg", "灰谷5.jpg", "灰谷6.jpg", "灰谷7.jpg") }
+    @{ zone = "千针石林(含闪光平原)"; mapID = 1441; files = @("千针石林.jpg", "千针石林2.jpg", "千针石林3.jpg", "千针石林4.jpg", "闪光平原.jpg", "闪光平原2.jpg") }
+    @{ zone = "菲拉斯";           mapID = 1444; files = @("菲拉斯.jpg", "菲拉斯2.jpg", "菲拉斯3.jpg") }
+    @{ zone = "塔纳利斯";         mapID = 1446; files = @("塔纳利斯.jpg", "塔纳利斯2.jpg") }
     @{ zone = "奥格瑞玛";         mapID = 1454; files = @("奥格瑞玛.jpg") }
     @{ zone = "幽暗城";           mapID = 1458; files = @("幽暗城.jpg") }
     @{ zone = "泽风岛";           mapID = 2521; files = @("泽风岛.jpg", "泽风岛2.jpg", "泽风岛3.jpg") }

@@ -1,12 +1,13 @@
 -- LibMonetColor-1.0.lua
--- Monet Color Engine v1.0.0
+-- Monet Color Engine v1.0.1
 -- A WoW dynamic environment color computation engine based on Impressionist color rules.
 -- Provides adaptive "5+3" theme colors for UI plugins.
 --
 -- Dependencies: LibStub, CallbackHandler-1.0
--- License: MAJOR = "LibMonetColor-1.0", MINOR = 10000
+-- Optional data: MonetColorMapData-1.0 (mapID -> environment color table)
+-- License: MAJOR = "LibMonetColor-1.0", MINOR = 10001
 
-local MAJOR, MINOR = "LibMonetColor-1.0", 10000
+local MAJOR, MINOR = "LibMonetColor-1.0", 10001
 
 local LibStub = _G.LibStub
 local CallbackHandler = LibStub and LibStub("CallbackHandler-1.0", true)
@@ -43,6 +44,13 @@ LMC.lastWarnTime = LMC.lastWarnTime or 0
 LMC.warnCooldown = 30 -- seconds between duplicate warnings
 -- Delta E threshold for event triggering
 LMC.deltaEThreshold = LMC.deltaEThreshold or 5.0
+-- Runtime env overrides for individual maps (RegisterMapEnv)
+LMC.overrideEnv = LMC.overrideEnv or {}
+-- Env used when a map has no data at all (SetFallbackEnv). The default is
+-- achromatic mid-grey so ComputeEdgeColor routes through its achromatic
+-- injection path: unknown zones get a calm, readable tint instead of
+-- pretending they all look like the same placeholder color.
+LMC.fallbackEnv = LMC.fallbackEnv or { h = 0, s = 0, l = 0.5 }
 
 -- Use CallbackHandler or fall back to a dependency-free registry that mirrors
 -- the CallbackHandler public shape: RegisterCallback(event, fn).
@@ -449,29 +457,103 @@ local function warn(msg)
 end
 
 -- ============================================================================
--- SECTION 5: Cache & Debounce System
+-- SECTION 5: Environment Sampling & Cache System
 -- ============================================================================
 
 --- Get the current map ID (WoW API).
 local function getCurrentMapID()
     -- C_Map is available in modern WoW (8.0+)
     if C_Map and C_Map.GetBestMapForUnit then
-        local mapID = C_Map.GetBestMapForUnit("player")
-        if mapID then return mapID end
+        local localMapID = C_Map.GetBestMapForUnit("player")
+        if localMapID then return localMapID end
     end
     -- Fallback
     return 0
 end
 
---- Sample the environment color for a map.
--- Phase 1 placeholder; Phase 2 replaces this with palette-based zone sampling.
--- The mapID argument is optional and may be ignored by simple samplers, but
--- passing it lets per-map samplers differ (see SetEnvironmentSampler).
+-- Cached lookup of the MonetColorMapData-1.0 module. The data module may be
+-- loaded after us (or not at all), so the lookup is retried until it hits.
+local mapEnvData
+local function getMapEnvData()
+    if mapEnvData then return mapEnvData end
+    local stub = _G.LibStub
+    if type(stub) == "table" then
+        local ok, data = pcall(stub, "MonetColorMapData-1.0", true)
+        if ok and type(data) == "table" and type(data.MapEnv) == "table" then
+            mapEnvData = data.MapEnv
+            return mapEnvData
+        end
+    end
+    local globalData = _G.LibMonetColorMapData
+    if type(globalData) == "table" and type(globalData.MapEnv) == "table" then
+        mapEnvData = globalData.MapEnv
+        return mapEnvData
+    end
+    return nil
+end
+
+-- Walk the parent-map chain (WoW only) to find a known ancestor of a map.
+-- Lets subzone/dungeon maps inherit their parent zone's environment.
+-- @return parentMapID, source | nil
+local function findParentEnv(mapID, data)
+    if not (type(C_Map) == "table" and C_Map.GetMapInfo) then return nil end
+    local current = mapID
+    for _ = 1, 5 do  -- depth cap: no cycles, no deep chains
+        local ok, info = pcall(C_Map.GetMapInfo, current)
+        if not ok or type(info) ~= "table" then return nil end
+        local parent = tonumber(info.parentMapID)
+        if not parent or parent == 0 then return nil end
+        if LMC.overrideEnv[parent] then return parent, "override" end
+        if data and data[parent] then return parent, "data" end
+        current = parent
+    end
+    return nil
+end
+
+--- Resolve the environment color (h, s, l) for a map.
+-- Resolution order:
+--   1. Runtime override registered via RegisterMapEnv
+--   2. Exact hit in MonetColorMapData-1.0 (generated from game_palette)
+--   3. Nearest known ancestor via C_Map parent chain (in-game only)
+--   4. Fallback env (SetFallbackEnv; default achromatic mid-grey)
+-- Never throws; all inputs are sanitized.
+-- @param mapID number|nil WoW map ID
+-- @return h, s, l, name|nil, source ("override"|"data"|"parent:override"|"parent:data"|"fallback")
+function LMC:GetMapEnv(mapID)
+    mapID = tonumber(mapID)
+    local fb = LMC.fallbackEnv
+    if not mapID or mapID == 0 then
+        return fb.h, fb.s, fb.l, nil, "fallback"
+    end
+
+    local entry = LMC.overrideEnv[mapID]
+    if entry then
+        return entry.h, entry.s, entry.l, entry.name, "override"
+    end
+
+    local data = getMapEnvData()
+    entry = data and data[mapID]
+    if entry then
+        return entry.h, entry.s, entry.l, entry.name, "data"
+    end
+
+    local parentID, parentSource = findParentEnv(mapID, data)
+    if parentID then
+        entry = LMC.overrideEnv[parentID] or data[parentID]
+        return entry.h, entry.s, entry.l, entry.name, "parent:" .. parentSource
+    end
+
+    return fb.h, fb.s, fb.l, nil, "fallback"
+end
+
+-- The default environment sampler (T2.1): zone-data lookup keyed by mapID.
+-- Integrating addons can still replace it wholesale via SetEnvironmentSampler.
+-- The mapID argument is optional; nil resolves to the fallback env.
 -- @param mapID number|nil WoW map ID
 -- @return h, s, l
 local function sampleEnvironmentColor(mapID)
-    -- TODO(T2.1): replace with actual world/zone color sampling keyed by mapID.
-    return 120, 0.15, 0.5  -- default: muted green, medium lightness
+    local h, s, l = LMC:GetMapEnv(mapID)
+    return h, s, l
 end
 
 --- Compute all theme colors for a given map ID and cache them.
@@ -646,6 +728,58 @@ function LMC:SetEnvironmentSampler(sampler)
         return false
     end
     sampleEnvironmentColor = sampler
+    LMC:ClearCache()
+    LMC:Refresh()
+    return true
+end
+
+--- Register or override the environment color for a single map at runtime.
+-- Runtime overrides take priority over the MonetColorMapData module, letting
+-- addons extend coverage zone-by-zone without forking the data module.
+-- @param mapID number WoW map ID (> 0)
+-- @param h number Hue [0, 360]
+-- @param s number Saturation [0, 1]
+-- @param l number Lightness [0, 1]
+-- @param name string|nil Optional zone name (for debugging /lmctest output)
+-- @return boolean success
+function LMC:RegisterMapEnv(mapID, h, s, l, name)
+    mapID = tonumber(mapID)
+    if not mapID or mapID <= 0 then
+        warn("RegisterMapEnv: mapID must be a positive number")
+        return false
+    end
+    h, s, l = tonumber(h), tonumber(s), tonumber(l)
+    if not h or not s or not l then
+        warn("RegisterMapEnv: h, s and l must be numbers")
+        return false
+    end
+    LMC.overrideEnv[mapID] = {
+        name = type(name) == "string" and name or nil,
+        h = ((h % 360) + 360) % 360,
+        s = math.max(0, math.min(1, s)),
+        l = math.max(0, math.min(1, l)),
+    }
+    LMC:ClearCache()
+    LMC:Refresh()
+    return true
+end
+
+--- Set the fallback environment color used for maps with no data.
+-- Default is achromatic mid-grey {h=0, s=0, l=0.5}, which the engine routes
+-- through its achromatic injection path (calm cool-blue edge glow).
+-- @param h, s, l numbers
+-- @return boolean success
+function LMC:SetFallbackEnv(h, s, l)
+    h, s, l = tonumber(h), tonumber(s), tonumber(l)
+    if not h or not s or not l then
+        warn("SetFallbackEnv: h, s and l must be numbers")
+        return false
+    end
+    LMC.fallbackEnv = {
+        h = ((h % 360) + 360) % 360,
+        s = math.max(0, math.min(1, s)),
+        l = math.max(0, math.min(1, l)),
+    }
     LMC:ClearCache()
     LMC:Refresh()
     return true
