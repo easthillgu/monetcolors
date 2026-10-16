@@ -12,6 +12,11 @@ monet_palette_v2.json
 monet_red_domain.json
 monet_hue_domains.json
 
+# --- Game screenshot sources & rendered reports (large / regenerable) ---
+# game_palette_v1.json (the data) IS tracked; re-run extract_game_palette_v1.ps1 to rebuild.
+Gamepics/*.jpg
+GamePalette_v1.html
+
 # --- OS / editor cruft ---
 Thumbs.db
 Desktop.ini
