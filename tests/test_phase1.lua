@@ -1,6 +1,6 @@
 -- test_phase1.lua
 -- Phase 1 unit tests for LibMonetColor
--- Run standalone outside WoW with: lua test_phase1.lua
+-- Run standalone outside WoW with: lua tests/test_phase1.lua
 -- Or paste into a WoW test addon.
 
 -- ============================================================================
@@ -14,13 +14,17 @@ _G.C_Map = nil  -- no map API in standalone mode
 _G.CreateFrame = nil  -- no frame creation in standalone mode
 
 -- Load the library (it handles its own LibStub/CallbackHandler if needed)
-local libPath = "LibMonetColor-1.0.lua"
-if not io.open(libPath, "r") then
-    -- Try with full path relative to script
-    local scriptPath = arg and arg[0] or "test_phase1.lua"
+-- Tests live in tests/; the library files sit in the repository root.
+local function resolvePath(name)
+    local scriptPath = arg and arg[0] or "tests/test_phase1.lua"
     local dir = scriptPath:match("^(.*)[\\/]") or "."
-    libPath = dir .. "/LibMonetColor-1.0.lua"
+    for _, candidate in ipairs({ name, dir .. "/" .. name, dir .. "/../" .. name }) do
+        if io.open(candidate, "r") then return candidate end
+    end
+    return name
 end
+
+local libPath = resolvePath("LibMonetColor-1.0.lua")
 dofile(libPath)
 
 local LMC = _G.LibMonetColor

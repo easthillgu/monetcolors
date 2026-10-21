@@ -1,6 +1,6 @@
 -- test_map_sampler.lua
 -- T2.1 tests: environment sampling from MonetColorMapData-1.0 zone data.
--- Run standalone: lua test_map_sampler.lua
+-- Run standalone: lua tests/test_map_sampler.lua
 --
 -- Covers:
 --   1. Data module loading (LibStub + global alias, double-load guard)
@@ -38,13 +38,13 @@ do
 end
 
 local function resolvePath(name)
-    local path = name
-    if not io.open(path, "r") then
-        local scriptPath = arg and arg[0] or "test_map_sampler.lua"
-        local dir = scriptPath:match("^(.*)[\\/]") or "."
-        path = dir .. "/" .. name
+    -- Tests live in tests/; the library files sit in the repository root.
+    local scriptPath = arg and arg[0] or "tests/test_map_sampler.lua"
+    local dir = scriptPath:match("^(.*)[\\/]") or "."
+    for _, candidate in ipairs({ name, dir .. "/" .. name, dir .. "/../" .. name }) do
+        if io.open(candidate, "r") then return candidate end
     end
-    return path
+    return name
 end
 
 dofile(resolvePath("LibMonetColor-1.0.lua"))

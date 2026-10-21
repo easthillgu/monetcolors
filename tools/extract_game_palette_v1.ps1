@@ -10,7 +10,7 @@
 Add-Type -AssemblyName System.Drawing
 
 $ErrorActionPreference = "Stop"
-$root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)  # repo root (script lives in tools/)
 $picsDir = Join-Path $root "Gamepics"
 
 # ---- UI 遮罩 (x1,y1,x2,y2 均为图片宽高比例, 该区域不参与统计) ----
@@ -202,7 +202,7 @@ foreach ($z in $zones) {
 }
 
 $json = $results | ConvertTo-Json -Depth 6
-$outJson = Join-Path $root "game_palette_v1.json"
+$outJson = Join-Path $root "data\game_palette_v1.json"
 [System.IO.File]::WriteAllText($outJson, $json, [System.Text.UTF8Encoding]::new($false))
 Write-Host "Saved: $outJson"
 
