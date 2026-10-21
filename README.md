@@ -250,4 +250,4 @@ Monet_Paintings/MANIFEST.md       原图清单（含尺寸与 SHA-256，原图�
 
 ## 协议
 
-[MIT License](LICENSE) © 2026 EastHillGui。莫奈画作源数据来自 Wikimedia Commons（公有领域），原图不入库，清单见 [`Monet_Paintings/MANIFEST.md`](Monet_Paintings/MANIFEST.md)。
+[MIT License](LICENSE) © 2026 EastHillGu。莫奈画作源数据来自 Wikimedia Commons（公有领域），原图不入库，清单见 [`Monet_Paintings/MANIFEST.md`](Monet_Paintings/MANIFEST.md)。
