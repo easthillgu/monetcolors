@@ -1,0 +1,24 @@
+## Interface: 16001
+## Title: LibMonetColor-1.0
+## Notes: Monet-style adaptive environment colour engine. Derives an adaptive "5+3" theme (edge glow / ambient tint / highlight wash + Monet neutral) from the player's current zone, plus an optional state layer that tints any UI with the player's combat / rest / health state.
+## Author: EastHillGui
+## Version: 1.1.0
+## X-Category: Library
+## X-Website: https://github.com/EastHillGu/monetcolors
+## OptionalDeps: CallbackHandler-1.0
+## LoadOnDemand: 1
+
+# LibStub is embedded (Public Domain) so this library needs no external addon.
+# Same file as MonetUI/Libs/LibStub/LibStub.lua.
+Libs\LibStub\LibStub.lua
+
+# Core engine
+LibMonetColor-1.0.lua
+
+# Optional zone environment data (mapID -> HSL); the engine finds it lazily.
+MonetColorMapData-1.0.lua
+
+# Player-state colour layer + shared pulse ticker.
+# Depends on the core engine above, so it must be loaded after it.
+# Consumers that only want the environment colours can leave it out.
+LibMonetColor-Anim-1.0.lua

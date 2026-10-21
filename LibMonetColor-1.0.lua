@@ -3,14 +3,22 @@
 -- A WoW dynamic environment color computation engine based on Impressionist color rules.
 -- Provides adaptive "5+3" theme colors for UI plugins.
 --
--- Dependencies: LibStub, CallbackHandler-1.0
+-- Dependencies: LibStub (vendored in Libs/, or provided by the consumer)
+-- Optional: CallbackHandler-1.0 (a built-in registry is used when absent)
 -- Optional data: MonetColorMapData-1.0 (mapID -> environment color table)
--- License: MAJOR = "LibMonetColor-1.0", MINOR = 10001
+-- License: MAJOR = "LibMonetColor-1.0", MINOR = 10002
 
-local MAJOR, MINOR = "LibMonetColor-1.0", 10001
+local MAJOR, MINOR = "LibMonetColor-1.0", 10002
 
+-- Only a real LibStub (a table exposing NewLibrary) counts. A bare function
+-- under _G.LibStub is our own standalone shim from a previous load, and must
+-- not be treated as LibStub or `LibStub:NewLibrary` would error on it.
 local LibStub = _G.LibStub
-local CallbackHandler = LibStub and LibStub("CallbackHandler-1.0", true)
+local hasLibStub = type(LibStub) == "table" and type(LibStub.NewLibrary) == "function"
+local CallbackHandler
+if hasLibStub then
+    CallbackHandler = LibStub("CallbackHandler-1.0", true)
+end
 
 -- Obtain the library object the same way every other LibStub library does.
 -- When LibStub is present we MUST use the table it hands back, otherwise
@@ -18,13 +26,28 @@ local CallbackHandler = LibStub and LibStub("CallbackHandler-1.0", true)
 -- would see none of our methods. NewLibrary returns nil when an equal or
 -- newer minor is already loaded — that is our double-load guard.
 local LMC
-if LibStub then
+if hasLibStub then
     LMC = LibStub:NewLibrary(MAJOR, MINOR)
     if not LMC then return end
 else
-    -- Not in WoW: run against a bare table (tests / tooling).
+    -- Not in WoW (tests / tooling), or LibStub will load after us: run on a
+    -- bare table. SECTION 10 publishes a shim for the former and adopts a real
+    -- LibStub later if one turns up (see adoptRealLibStub).
+    -- A function under _G.LibStub is our own shim from a previous load; reuse
+    -- that table and honour the same double-load guard LibStub would apply,
+    -- so reloading without LibStub cannot split state across two tables.
+    if type(LibStub) == "function" then
+        local existing = LibStub(MAJOR, true)
+        if type(existing) == "table" and (existing.Version or 0) >= MINOR then
+            return
+        end
+    end
     LMC = {}
 end
+
+-- Forward declaration. Set in SECTION 10 only when we run without a real
+-- LibStub; it is nil in WoW so the hot path pays nothing for it.
+local adoptRealLibStub
 
 -- State. `or` keeps existing values when LibStub hands back a table from a
 -- previously loaded (lower) minor.
@@ -39,8 +62,9 @@ LMC.activeProfile = LMC.activeProfile or "Monet"
 LMC.customProfiles = LMC.customProfiles or {}
 -- Normalized (defaults-filled) copy of each custom profile, cache
 LMC.resolvedProfiles = {}
--- Warning cooldown tracking
-LMC.lastWarnTime = LMC.lastWarnTime or 0
+-- Warning cooldown tracking: per-message timestamps, so one noisy caller
+-- cannot silence an unrelated warning (see warn()).
+LMC.warnTimes = LMC.warnTimes or {}
 LMC.warnCooldown = 30 -- seconds between duplicate warnings
 -- Delta E threshold for event triggering
 LMC.deltaEThreshold = LMC.deltaEThreshold or 5.0
@@ -268,6 +292,24 @@ local DEFAULT_MONET_RULES = {
         alphaMax = 0.30,
         saturationGuard = 0.20,
     },
+
+    -- Highlight Wash shaping: hue offset from the environment hue, a fraction
+    -- of env saturation, and a lightness lift above envL with a hard ceiling.
+    highlight = {
+        hueShift = 30,
+        satMult  = 0.15,
+        lOffset  = 0.25,
+        lMax     = 0.95,
+    },
+
+    -- Neutral (Monet grey for text/dividers). `saturation` is clamped to the
+    -- documented "< 0.05" contract ceiling; lightness tracks envL between
+    -- lMin and lMin + lRange.
+    neutral = {
+        saturation = 0.02,
+        lMin       = 0.35,
+        lRange     = 0.30,
+    },
 }
 
 --- Fill missing top-level keys of a custom profile from the built-in defaults
@@ -410,6 +452,7 @@ function LMC.ComputeAmbientTint(envH, envS, envL, rules)
 end
 
 --- Compute Highlight Wash (subtle top-light/gradient overlay).
+-- Reads rules.highlight so a custom Profile can reshape it.
 function LMC.ComputeHighlightWash(envH, envS, envL, rules)
     rules = rules or DEFAULT_MONET_RULES
 
@@ -417,25 +460,31 @@ function LMC.ComputeHighlightWash(envH, envS, envL, rules)
     envS = math.max(0, math.min(1, envS or 0))
     envL = math.max(0, math.min(1, envL or 0.5))
 
-    -- Highlight: shift hue slightly lighter, very low saturation
-    local hlHue = (envH + 30) % 360
-    local hlS = envS * 0.15
-    local hlL = math.min(0.95, envL + 0.25)
+    local hl = rules.highlight or DEFAULT_MONET_RULES.highlight
+    -- Highlight: shift hue slightly, very low saturation, lift lightness.
+    local hlHue = (envH + (hl.hueShift or 30)) % 360
+    local hlS = math.max(0, math.min(1, envS * (hl.satMult or 0.15)))
+    local hlL = math.min(hl.lMax or 0.95, envL + (hl.lOffset or 0.25))
+    hlL = math.max(0, math.min(1, hlL))
 
     local r, g, b = LMC.HSLToRGB(hlHue, hlS, hlL)
     return r, g, b
 end
 
 --- Compute Neutral (Monet-style neutral gray for text/dividers).
+-- Reads rules.neutral; saturation is clamped to 0.05 to hold the contract.
 function LMC.ComputeNeutral(envH, envS, envL, rules)
     rules = rules or DEFAULT_MONET_RULES
 
     envL = math.max(0, math.min(1, envL or 0.5))
 
-    -- Very subtle warm/cool bias based on environment hue
+    local nr = rules.neutral or DEFAULT_MONET_RULES.neutral
+    -- Hue is decorative only (saturation stays below 0.05), and HSLToRGB
+    -- wraps it, so it does not need clamping here.
     local neutralH = envH or 0
-    local neutralS = 0.02  -- nearly gray
-    local neutralL = 0.35 + envL * 0.3  -- 0.35-0.65 range, adapts to env
+    local neutralS = math.max(0, math.min(0.05, nr.saturation or 0.02))
+    local neutralL = (nr.lMin or 0.35) + envL * (nr.lRange or 0.30)
+    neutralL = math.max(0, math.min(1, neutralL))
 
     local r, g, b = LMC.HSLToRGB(neutralH, neutralS, neutralL)
     return r, g, b
@@ -445,14 +494,20 @@ end
 -- SECTION 4: Warning System
 -- ============================================================================
 
+-- Each distinct message carries its own cooldown so one noisy caller cannot
+-- silence an unrelated warning. With no clock available (plain Lua tooling)
+-- GetTime is nil and every distinct message is printed at most once.
 local function warn(msg)
-    local now = GetTime and GetTime() or 0
-    if now - LMC.lastWarnTime < LMC.warnCooldown then
-        return  -- skip, still in cooldown
+    msg = tostring(msg)
+    local now = GetTime and GetTime() or nil
+    local last = LMC.warnTimes[msg]
+    if last then
+        if not now then return end                      -- no clock: print once
+        if now - last < LMC.warnCooldown then return end -- still cooling down
     end
-    LMC.lastWarnTime = now
+    LMC.warnTimes[msg] = now or true
     if DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF6B6B[LibMonetColor]|r " .. tostring(msg))
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF6B6B[LibMonetColor]|r " .. msg)
     end
 end
 
@@ -558,6 +613,9 @@ end
 
 --- Compute all theme colors for a given map ID and cache them.
 local function computeAndCache(mapID)
+    -- No-op in WoW (nil); only the standalone/tooling path ever sets this.
+    if adoptRealLibStub then adoptRealLibStub() end
+
     mapID = mapID or getCurrentMapID()
 
     local envH, envS, envL = sampleEnvironmentColor(mapID)
@@ -611,6 +669,12 @@ local function recomputeAndFire(mapID)
     local oldEntry = LMC.colorCache[mapID]
     LMC.colorCache[mapID] = nil  -- force recompute
     local newEntry = computeAndCache(mapID)
+    -- "OnThemeRefreshed" fires on EVERY recompute, while "OnThemeColorsChanged"
+    -- stays debounced by the Delta E threshold.  A consumer that repaints on
+    -- every theme change (the Anim layer) would otherwise miss a silent
+    -- profile switch or a subtle zone shift, because the debounced event
+    -- would not fire for it.
+    LMC.events:Fire("OnThemeRefreshed", newEntry)
     if shouldFireEvent(oldEntry, newEntry) then
         LMC.events:Fire("OnThemeColorsChanged", newEntry)
     end
@@ -809,6 +873,8 @@ function LMC:RegisterProfile(name, rules)
 end
 
 --- Activate a registered profile.
+-- Unknown names do not leave a stale custom profile active: per the API
+-- contract we fall back to the built-in "Monet" rules and report failure.
 -- @param name string
 -- @return boolean success
 function LMC:SetActiveProfile(name)
@@ -817,12 +883,14 @@ function LMC:SetActiveProfile(name)
         LMC:Refresh()
         return true
     end
-    if LMC.customProfiles[name] then
+    if type(name) == "string" and LMC.customProfiles[name] then
         LMC.activeProfile = name
         LMC:Refresh()
         return true
     end
-    warn("SetActiveProfile: unknown profile '" .. tostring(name) .. "'")
+    warn("SetActiveProfile: unknown profile '" .. tostring(name) .. "', falling back to 'Monet'")
+    LMC.activeProfile = "Monet"
+    LMC:Refresh()
     return false
 end
 
@@ -897,15 +965,52 @@ end
 -- Initialize
 ensureEventFrame()
 
--- Standalone fallback: provide a minimal LibStub so tooling and tests can
--- fetch the library exactly like addons do in WoW. When the real LibStub is
--- present the library was already registered in the header (NewLibrary).
-if not _G.LibStub then
-    LMC.LibStubName = MAJOR
-    _G.LibStub = function(name, silent)
-        if name == MAJOR then return LMC end
-        return nil
+-- Standalone shim + late LibStub adoption -----------------------------------
+--
+-- When no real LibStub exists at load time we publish a minimal shim so tests
+-- and tooling can fetch the library exactly like addons do. The shim is never
+-- installed over a real LibStub, and it is always (re)bound to the library
+-- table this chunk just built — so a reload after a minor bump cannot leave the
+-- shim pointing at a stale table. A real LibStub loaded later simply wins the
+-- global name, and adoptRealLibStub() then joins its registry so LibStub(MAJOR)
+-- still resolves to this library instead of returning nil.
+if not hasLibStub then
+    local currentStub = _G.LibStub
+    if currentStub == nil or type(currentStub) == "function" then
+        LMC.standaloneLibStub = true
+        _G.LibStub = function(name, silent)
+            if name == MAJOR then return LMC end
+            if not silent then
+                error("Library " .. tostring(name) .. " not found", 2)
+            end
+            return nil
+        end
     end
+end
+
+if not hasLibStub then
+    adoptRealLibStub = function()
+        if not LMC.standaloneLibStub then
+            adoptRealLibStub = nil  -- we never owned the global; nothing to do
+            return
+        end
+        local real = _G.LibStub
+        if type(real) ~= "table" or type(real.NewLibrary) ~= "function" then
+            return  -- still standalone; check again on the next call
+        end
+        adoptRealLibStub = nil
+        local joined = real:NewLibrary(MAJOR, MINOR)
+        if type(joined) ~= "table" or joined == LMC then return end
+        -- LibStub handed us a fresh table. Every method closes over the `LMC`
+        -- upvalue, so moving the state onto the new table and re-pointing LMC
+        -- keeps them all consistent.
+        for k, v in pairs(LMC) do joined[k] = v end
+        joined.standaloneLibStub = nil
+        LMC = joined
+        _G.LibMonetColor = LMC
+    end
+else
+    adoptRealLibStub = nil
 end
 
 -- Global alias for convenience
