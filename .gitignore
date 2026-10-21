@@ -27,6 +27,7 @@ monet_hue_domains.json
 .vscode/
 .opencode/
 opencode.json
+AGENTS.md
 *.local
 *.local.lua
 

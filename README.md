@@ -198,7 +198,7 @@ lua tests/test_anim_runtime.lua  # 19 个 sink / ticker / 事件运行时测试
 
 GitHub Actions 在每次 push / PR 时跑同一组命令（见 `.github/workflows/tests.yml`）。VSCode 用户可直接运行任务：`Run Phase 1 Tests` / `Run Hardening Tests` / `Run Map Sampler Tests` / `Run LibStub Order Tests` / `Run Anim State Tests` / `Run Anim Runtime Tests`。
 
-开发约定（5.1 语法红线、生成文件、提交前检查）见 [`AGENTS.md`](AGENTS.md)，版本变更见 [`CHANGELOG.md`](CHANGELOG.md)。
+版本变更见 [`CHANGELOG.md`](CHANGELOG.md)；提交前请先跑上面 6 组测试，全部 `PASSED` 再提交。
 
 ### 目录结构
 
