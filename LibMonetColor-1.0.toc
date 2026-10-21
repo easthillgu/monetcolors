@@ -4,7 +4,7 @@
 ## Author: EastHillGui
 ## Version: 1.1.0
 ## X-Category: Library
-## X-Website: https://github.com/EastHillGu/monetcolors
+## X-Website: https://github.com/easthillgu/monetcolors
 ## OptionalDeps: CallbackHandler-1.0
 ## LoadOnDemand: 1
 

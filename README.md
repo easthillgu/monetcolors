@@ -7,7 +7,7 @@
 ![Tests](https://img.shields.io/badge/tests-131-brightgreen.svg)
 ![Lua 5.1](https://img.shields.io/badge/Lua-5.1-blue.svg)
 
-仓库：<https://github.com/EastHillGui/monetcolors>
+仓库：<https://github.com/easthillgu/monetcolors>
 
 它不是一个静态的颜色查找表，而是随着**当前区域环境色**实时推导 UI 配色：把"你所在的地图"转译成一组协调、耐看、有莫奈味道的界面颜色。
 
