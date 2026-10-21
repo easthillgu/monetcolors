@@ -1,22 +1,47 @@
-# --- Large source paintings (Wikimedia Commons, public domain) ---
-# Re-downloadable; see Monet_Paintings/MANIFEST.md for inventory + SHA-256.
+# ============================================================
+# 入库口径：只跟踪「能发布 + 能复现」的文件
+#   LibMonetColor-*.lua / *.toc / Libs/   库本体（可直接拷进 AddOns）
+#   tests/                                单元测试（本地与 CI 跑）
+#   data/                                 取色源数据（小体积，可复现）
+#   tools/*.ps1                           数据管线脚本
+#   README.md / LICENSE / CHANGELOG.md / API 契约 / MANIFEST
+# 其余（截图、原画、中间产物、本地开发环境）只留本机，不进版本库。
+# ============================================================
+
+# ---- 大体积素材：可重新生成 / 可重新下载 ----
+Gamepics/
 Monet_Paintings/*.jpg
 Monet_Paintings/_backup_lowres/
+GamePalette_v1.html
+GamePalette_v1.png
 
-# --- Intermediate extraction artifacts ---
-# Only the v3 outputs are tracked (monet_palette_v3.json, monet_red_domain_v3.json).
-# These are upstream pipeline snapshots kept on disk for reference only.
+# ---- 中间产物（只保留 data/ 下的 v1 / v3 结果）----
 monet_palette_raw.json
 monet_palette_clean.json
 monet_palette_v2.json
 monet_red_domain.json
 monet_hue_domains.json
 
-# --- Game screenshot sources & rendered reports (large / regenerable) ---
-# game_palette_v1.json (the data) IS tracked; re-run extract_game_palette_v1.ps1 to rebuild.
-Gamepics/*.jpg
-GamePalette_v1.html
+# ---- 本地开发环境与内部笔记 ----
+.dev/
+.vscode/
+.opencode/
+opencode.json
+*.local
+*.local.lua
 
-# --- OS / editor cruft ---
+# ---- 打包产物 ----
+*.zip
+*.tar.gz
+_build/
+release/
+luac.out
+
+# ---- 编辑器 / 系统 ----
+.idea/
+*.swp
+*.swo
+*~
 Thumbs.db
 Desktop.ini
+.DS_Store

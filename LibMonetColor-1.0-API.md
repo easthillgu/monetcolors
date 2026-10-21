@@ -1,10 +1,10 @@
 # 📖 LibMonetColor-1.0 API Reference
 
-> **版本**: 1.0.1 (Phase 1 核心算法 + 加固 + Phase 2 T2.1 地图采样) | **协议**: MIT | **依赖**: `LibStub`, `CallbackHandler-1.0` | **可选数据**: `MonetColorMapData-1.0`
+> **版本**: 1.1.0 (Phase 1 核心算法 + 加固 + Phase 2 T2.1 地图采样 + 状态染色层 `LibMonetColor-Anim-1.0`) | **协议**: MIT | **依赖**: `LibStub`（随包内嵌于 `Libs/LibStub/`，或由接入方提供） | **可选**: `CallbackHandler-1.0`（缺失时使用库内置回调注册表） | **可选数据**: `MonetColorMapData-1.0`
 > 
 > **定位**：WoW 动态环境色彩计算引擎。它不是静态的颜色查找表，而是基于"印象派（莫奈）色彩规则"的实时调色中间件，为 UI 插件提供自适应的"5+3"主题色系统。
 > 
-> **当前状态**: 核心算法已实现并加固，**45 个单元测试 + 11 个加固回归 + 16 个 T2.1 采样测试（共 72）**全部通过。Phase 2（T2.1）已完成：`sampleEnvironmentColor()` 默认实现为基于 `MonetColorMapData-1.0` 区域数据的查表采样器（14 区域，源自游戏截图取色管线），未知地图回退中性无彩 env 并走无彩域注入路径。
+> **当前状态**: 核心算法已实现并加固，**45 个核心 + 14 个加固回归 + 16 个 T2.1 采样 + 4 个 LibStub 加载顺序 + 33 个状态染色 + 19 个运行时（共 131）**全部通过。Phase 2（T2.1）已完成：`sampleEnvironmentColor()` 默认实现为基于 `MonetColorMapData-1.0` 区域数据的查表采样器（14 区域，源自游戏截图取色管线），未知地图回退中性无彩 env 并走无彩域注入路径。1.1.0 新增独立的**状态染色层** `LibMonetColor-Anim-1.0`：把玩家的战斗 / 休息 / 血量 / PvP / 载具状态翻译成颜色修饰，并用**一个共享 ticker** 驱动所有闪烁。
 
 ---
 
@@ -13,11 +13,12 @@
 2. [快速接入 (Quick Start)](#-快速接入-quick-start)
 3. [消费者 API (Consumer API)](#-消费者-api-consumer-api)
 4. [环境取色数据与 API (Map Env API, T2.1)](#-环境取色数据与-api-map-env-api-t21)
-5. [生产者 API (Producer API)](#-生产者-api-producer-api)
-6. [事件与回调 (Events & Callbacks)](#-事件与回调-events--callbacks)
-7. [数据结构定义 (Data Structures)](#-数据结构定义-data-structures)
-8. [契约、安全与降级机制](#️-契约安全与降级机制)
-9. [最佳实践与开发自查](#-最佳实践与开发自查)
+5. [状态染色层 API (Anim API, 1.1.0)](#-状态染色层-api-anim-api-110)
+6. [生产者 API (Producer API)](#-生产者-api-producer-api)
+7. [事件与回调 (Events & Callbacks)](#-事件与回调-events--callbacks)
+8. [数据结构定义 (Data Structures)](#-数据结构定义-data-structures)
+9. [契约、安全与降级机制](#️-契约安全与降级机制)
+10. [最佳实践与开发自查](#-最佳实践与开发自查)
 
 ---
 
@@ -216,7 +217,7 @@ MDM.MapEnv = {
 }
 ```
 
-*   **数据源**：`game_palette_v1.json` ← `extract_game_palette_v1.ps1`（游戏截图取色管线）← `gen_map_env.ps1`（生成本模块）。新增区域时重跑两条管线即可。
+*   **数据源**：`data/game_palette_v1.json` ← `tools/extract_game_palette_v1.ps1`（游戏截图取色管线）← `tools/gen_map_env.ps1`（生成本模块）。新增区域时重跑两条管线即可。
 *   **加载顺序无关**：库通过 `LibStub("MonetColorMapData-1.0", true)` 或全局别名 `LibMonetColorMapData` **惰性查找**，数据模块先于/后于库加载均可。
 *   **数据缺失安全**：数据模块不存在时库照常工作，所有未收录地图解析为 fallback env。
 
@@ -272,6 +273,176 @@ function LMC:SetFallbackEnv(h, s, l)
 
 ---
 
+## 🎨 状态染色层 API (Anim API, 1.1.0)
+
+`LibMonetColor-Anim-1.0` 是**独立文件、独立版本**的伴随库（`LibMonetColor-Anim-1.0.lua`）。它把**玩家状态**（战斗 / 休息 / 血量 / PvP / 载具 / 死亡）翻译成颜色修饰，并用**一个共享 ticker** 驱动所有闪烁动画。
+
+> **为什么要分文件**：色彩引擎是纯函数 + 缓存，状态层带事件帧、ticker 和状态采样。分开后，色彩库可以在没有状态需求的项目里单独使用（零事件、零 ticker），动画层的 bug 也污染不到取色逻辑。
+
+### 快速接入
+
+```lua
+local LMC  = LibStub("LibMonetColor-1.0", true)
+local Anim = LMC and LMC.Anim   -- 或 LibStub("LibMonetColor-Anim-1.0", true)
+```
+
+`Anim` 挂载在核心库上（`LMC.Anim`），只拿一个句柄即可；也可以直接 `LibStub("LibMonetColor-Anim-1.0", true)` 取用。**加载顺序**：核心库必须在 Anim 之前加载（`.toc` 已保证）。
+
+### 订阅式接入（推荐）
+
+```lua
+-- @param apply function(r, g, b, a, state, base)  收到最终颜色
+-- @param opts   table
+--   base      = "edge"（默认）| "ambient" | "highlight" | "neutral"
+--   pulse     = true|false   是否参与闪烁（默认 false：背景/装饰线不需要）
+--   modifiers = { combat=true, ooc=true, rest=true, lowHealth=true,
+--                 pvp=true, vehicle=true, dead=true }   逐项开关
+local handle = Anim:RegisterColorSink(function(r, g, b, a, state)
+    MyFrame:SetBackdropBorderColor(r, g, b, a)
+end, { base = "edge", pulse = true })
+```
+
+接入方**不需要**订阅任何游戏事件、不需要算血量百分比、不需要写 `OnUpdate`：
+
+| 目标 | 推荐参数 |
+| :--- | :--- |
+| 单位框架边框 | `base="edge", pulse=true` |
+| 动作条背景 | `base="ambient", pulse=false, modifiers={ lowHealth=false }` |
+| 装饰线 / 分割线 | `base="neutral", pulse=false` |
+| 顶部高光渐变 | `base="highlight", pulse=false` |
+
+Handle 生命周期：
+
+```lua
+handle:Refresh()          -- 强制重采样并重绘
+handle:SetEnabled(false)  -- 暂停（例如被悬停/仇恨高亮覆盖时）
+handle:GetState()         -- 最近一次采样到的状态表
+handle:GetColor()         -- 当前颜色（含此刻的脉搏）
+handle:Unregister()       -- 注销
+```
+
+### 拉取式接入
+
+```lua
+local r, g, b, a = Anim:GetColor("edge")            -- 含此刻脉搏
+local r, g, b, a = Anim:GetColor("edge", now)       -- 指定时刻（确定性，便于自绘动画/测试）
+local r, g, b, a = Anim:GetColor("ambient", nil, { lowHealth = false })  -- 单次调用覆盖修饰开关
+local r, g, b, a = Anim:GetColor({ r = .2, g = .2, b = .2, a = .9 })      -- 任意自定义基色
+```
+
+### GetPlayerState
+
+```lua
+-- @return state table（只读）
+function Anim:GetPlayerState()
+```
+
+| 字段 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `inCombat` | boolean | 玩家是否在战斗中 |
+| `resting` | boolean | 是否在休息状态 |
+| `healthPct` | number | 血量百分比 `[0,1]`（保密时为 1） |
+| `healthKnown` | boolean | 血量是否可读（保密时为 false） |
+| `tier` | string | `"healthy"` / `"low"` / `"critical"` / `"unknown"` |
+| `lowHealth` | boolean | 是否低于阈值 |
+| `dead` / `ghost` | boolean | 死亡 / 幽灵 |
+| `pvp` / `ffaPvp` | boolean | PvP 标记 / 自由PvP |
+| `vehicle` | boolean | 是否在载具中 |
+| `afk` / `charmed` | boolean | 暂离 / 魅惑 |
+| `combatStart` | number | 进入战斗的时刻（脉搏锚点） |
+| `updatedAt` | number | 最近一次采样时刻 |
+
+> 状态**只来自玩家**。目标、队伍、敌方的血量与状态一律不判定——这是本层的边界，也是它能保持轻量的原因。
+
+### SetStyle / GetStyle / ResetStyle
+
+```lua
+Anim:SetStyle({
+    combat = {
+        enabled = true,
+        lightnessBoost = 0.08,    -- 战斗时明度提升
+        saturationBoost = 0.10,   -- 战斗时饱和度提升
+        alphaScale = 1.10,        -- 战斗时 alpha 倍率
+        enterFlash = true,        -- 进入战斗时闪烁
+        flashDuration = 0.7,      -- 闪烁时长（秒）
+        flashWavePeriod = 0.2,    -- 闪烁波形周期
+        flashAmplitude = 0.28,    -- 闪烁振幅
+        pulse = true,             -- 战斗中持续脉搏
+        pulseAmplitude = 0.10,
+        pulsePeriod = 1.6,
+    },
+    ooc = { enabled = true, lightnessScale = 0.88, alphaScale = 0.85 },
+    lowHealth = {
+        enabled = true,
+        threshold = 0.35,         -- 低血阈值
+        critical = 0.20,          -- 危急阈值
+        color = { h = 0, s = 0.85, l = 0.52 },  -- 也接受 { r, g, b }
+        blend = 0.55,             -- 阈值处的红色混合比例
+        blendCritical = 1.0,      -- 危急处（纯正红）
+        alphaBoost = 0.15,
+        pulse = true, pulseAmplitude = 0.22,
+        pulsePeriod = 0.75, criticalPeriod = 0.45,
+    },
+    rest    = { enabled = true, color = { h = 210, s = 0.45, l = 0.55 }, blend = 0.30, alphaScale = 0.95 },
+    pvp     = { enabled = true, color = { h = 0, s = 0.70, l = 0.52 }, blend = 0.20 },
+    vehicle = { enabled = true, color = { h = 42, s = 0.60, l = 0.55 }, blend = 0.20 },
+    dead    = { enabled = true, lightness = 0.35, alpha = 0.30 },
+    pulse   = { fps = 15 },
+})
+Anim:GetStyle()    -- 当前样式表（只读）
+Anim:ResetStyle()  -- 恢复内置默认值
+```
+
+* `SetStyle` 做**深合并**，未提及的字段保持不变；数值越界自动钳制；颜色可写 HSL 或 RGB。
+* 样式**不写 SavedVariables**——库不持有玩家配置，由接入方持久化后调用 `SetStyle` 还原。
+* `SetStyle` 会立即重绘所有 sink。
+
+### 修饰优先级
+
+从底到顶依次叠加：
+
+1. **基色**：`edge` / `ambient` / `highlight` / `neutral` / 自定义 `{r,g,b,a}`
+2. **休息**（仅脱战时）：向休息色混合
+3. **PvP** → **载具**：各自的色相混合
+4. **战斗增亮**（战斗中）或 **脱战降亮**
+5. **低血量**：向危险红做 **RGB 直混**（阈值 55% → 危急 100%），这是唯一接管色相的修饰——**不做莫奈互补**，可读性优先
+6. **alpha 修饰**：战斗 ×1.10 / 脱战 ×0.85 / 低血 +0~0.15
+7. **脉搏**：见下
+
+**死亡短路**：灰度 + 明度 0.35 + alpha 0.30，停止一切脉搏与染色。
+
+### 动画（省电设计）
+
+* 波形用**预计算的 64 点余弦表**（LUT），tick 内**不做三角函数**。
+* 用 `0.5-0.5*cos` 相位（而非 `0.5+0.5*sin`）：进入战斗时从基色平滑起振，**不会先跳一下**。
+* 战斗波形与低血波形**每 tick 只算一次**，所有 sink 共用。
+* 状态变化时算好静态 RGB，tick **只改 alpha**。
+* alpha 变化小于 `1/128` 不触发重绘。
+* 默认 15 fps（`pulse.fps`，可配 1–60），无活跃脉搏时 ticker 立刻 `Hide()`。
+* 一个库**只有一个 ticker**，无论多少消费者。
+
+### 事件
+
+```lua
+Anim:RegisterCallback("OnCombatStateChanged", function(_, inCombat) end)
+Anim:RegisterCallback("OnPlayerStateChanged",   function(_, state) end)
+Anim:RegisterCallback("OnStateColorChanged",    function(_, base, r, g, b, a, state) end)
+```
+
+* 事件只在**状态切换**时触发，不随脉搏刷屏。
+* 只要注册了回调或 sink，库就会订阅游戏事件；两者都没有时**完全反注册**，空闲零开销。
+* `OnStateColorChanged` 对每个 sink 触发一次（`base` 为该 sink 的基色槽）。
+
+### 保密值（Secret values）
+
+在受限制状态（战斗 / PvP / boss 战）下，客户端可能把血量交成 **secret** 值，任何比较或算术都会抛错。本层的处理：
+
+* 所有单位 API 一律 `pcall` 包裹；
+* 优先用 `C_Secrets.HasSecretRestrictions()` + `C_Secrets.ShouldUnitHealthMaxBeSecret("player")` 判定；**判定不了就按 secret 处理**（宁可少一个效果，也不冒错）；
+* 血量读不到时 `healthKnown=false`、**低血效果关闭**，战斗 / 休息等其他效果照常。
+
+---
+
 ## 🏭 生产者 API (Producer API)
 
 生产者 API 供高级用户注册自定义色彩规则 Profile。
@@ -306,8 +477,14 @@ function LMC:RegisterProfile(name, rules)
     achromaticWarmHue = 300,
     achromaticCoolHue = 210,
     achromaticSat = 0.12,
+    ambient = {alphaMin=0.15, alphaMax=0.30, saturationGuard=0.20},
+    -- 高光/中性灰的成型参数，均可缺省（缺省即沿用内置 Monet 值）
+    highlight = {hueShift=30, satMult=0.15, lOffset=0.25, lMax=0.95},
+    neutral   = {saturation=0.02, lMin=0.35, lRange=0.30},
 }
 ```
+
+> `highlight` 与 `neutral` 由 `ComputeHighlightWash` / `ComputeNeutral` 读取；`neutral.saturation` 会被夹到 `0.05` 以内以守住契约，`highlight` 与 `neutral` 的明度结果都会被夹进 `[0, 1]`。只填部分键时其余键回退内置默认值。
 
 ---
 
@@ -320,6 +497,8 @@ function LMC:RegisterProfile(name, rules)
 -- @return boolean     是否激活成功
 function LMC:SetActiveProfile(name)
 ```
+
+> 名称未知时**不会保持原样**：会打印一条警告、切回内置 `"Monet"` 并刷新，然后返回 `false`。这样失败的激活不会把界面留在半个自定义 Profile 上。
 
 ---
 
@@ -385,6 +564,18 @@ end)
 
 > 注意：`Refresh()` 是"强制重算"，但**事件仍受 Delta E 防抖约束**——若重算后颜色变化不足阈值则不发事件，以避免 UI 重绘风暴。
 
+### OnThemeRefreshed
+
+**每次重算都会触发**（不受 Delta E 防抖约束）。与 `OnThemeColorsChanged` 的区别：后者只在颜色"显著"变化时触发，前者是"我刚重算过，这是最新结果"。
+
+```lua
+LMC:RegisterCallback("OnThemeRefreshed", function(event, entry)
+    -- entry 与 OnThemeColorsChanged 的 payload 相同
+end)
+```
+
+> 状态染色层（`LibMonetColor-Anim-1.0`）订阅的就是这个事件：Profile 切换或细微换区时 `OnThemeColorsChanged` 可能不触发，但基色确实变了。
+
 ---
 
 ## 📐 数据结构定义 (Data Structures)
@@ -418,10 +609,13 @@ end)
 |------|------|
 | **永不抛错** | 所有公开 API 在异常时返回有效 RGB `(0.5, 0.5, 0.5)` |
 | **值域保证** | 所有返回值均在 `[0, 1]` 范围内 |
-| **事件防抖** | `OnThemeColorsChanged` 仅在 Delta E > 5.0 时触发 |
-| **输入宽容** | 无效 Profile 回退 `"Monet"`，无效 MapID 回退当前地图 |
+| **事件防抖** | `OnThemeColorsChanged` 仅在 Delta E > 5.0 时触发；`OnThemeRefreshed` 每次重算必发 |
+| **输入宽容** | 无效 Profile 回退 `"Monet"`，无效 MapID 回退当前地图，非法样式参数钳制而非报错 |
 | **版本兼容** | 1.x 生命周期内公开 API 签名、返回值、事件名向后兼容 |
-| **警告冷却** | 重复警告间隔 30 秒，避免刷屏 |
+| **警告冷却** | 每条消息各自 30 秒冷却（互不牵连），避免刷屏；无计时器环境（纯 Lua 工具）下每条消息最多打印一次 |
+| **消费者隔离** | 状态层里某个消费者的回调抛错，不会影响其它消费者（`pcall` 隔离 + 一次告警） |
+| **保密值安全** | 受限状态下血量读不到时只关闭低血效果，绝不抛错、绝不参与比较运算 |
+| **空闲零开销** | 没有 sink 也没有回调时，状态层不订阅任何游戏事件，ticker 不运行 |
 
 ---
 

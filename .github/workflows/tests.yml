@@ -1,0 +1,28 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lua:
+    name: Lua 5.4 unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.4.6"
+
+      - name: Run test suites
+        shell: bash
+        run: |
+          set -e
+          for t in tests/test_*.lua; do
+            echo "::group::$t"
+            lua "$t"
+            echo "::endgroup::"
+          done

@@ -2,9 +2,12 @@
 
 > WoW 动态环境色彩计算引擎 —— 一个基于"印象派（莫奈）色彩规则"的实时调色中间件，为 UI 插件输出自适应的「5+3」主题色系统。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#协议)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Interface](https://img.shields.io/badge/WoW-Retail%2012.x-orange.svg)
-![Tests](https://img.shields.io/badge/tests-45%20%2B%2011-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-131-brightgreen.svg)
+![Lua 5.1](https://img.shields.io/badge/Lua-5.1-blue.svg)
+
+仓库：<https://github.com/EastHillGui/monetcolors>
 
 它不是一个静态的颜色查找表，而是随着**当前区域环境色**实时推导 UI 配色：把"你所在的地图"转译成一组协调、耐看、有莫奈味道的界面颜色。
 
@@ -15,8 +18,11 @@
 - **环境驱动**：颜色由当前地图/区域的环境色实时推导，随区域切换平滑变化。
 - **5+3 色彩模型**：功能色与风格色严格分离，保证可读性优先。
 - **莫奈规则引擎**：环境互补色 + 明度 S 曲线钳制 + 色相域细分 + 无彩域兜底注入。
+- **状态染色层（可选）**：`LibMonetColor-Anim-1.0` 把**玩家状态**（战斗 / 休息 / 低血 / PvP / 载具）翻译成颜色修饰——边框、动作条背景、装饰线都能直接用，接入方不写一行状态判定。
+- **一个共享 ticker**：所有闪烁动画共用一个帧、64 点查表波形、15 fps、空闲自动停表。
 - **事件驱动 + 防抖**：仅当颜色变化超过 Delta E 阈值时才通知订阅者，杜绝重绘风暴。
 - **永不抛错**：所有公开 API 异常时回退中性灰，保证接入方 UI 不崩。
+- **保密值安全**：受限状态下血量读不到就只关掉低血效果，绝不抛错。
 - **可扩展**：生产者可注册自定义规则 Profile。
 
 ---
@@ -76,6 +82,37 @@ local er, eg, eb, ea,   -- edge
 
 ---
 
+## 🎨 状态染色（可选）
+
+`LibMonetColor-Anim-1.0` 把**玩家状态**变成颜色修饰：战斗中提亮、低血变红脉冲、脱战降亮、休息转冷调、PvP / 载具染色。**接入方不订阅事件、不算血量、不写 OnUpdate。**
+
+```lua
+local LMC  = LibStub("LibMonetColor-1.0", true)
+local Anim = LMC and LMC.Anim
+
+-- 边框：参与战斗闪烁与低血脉冲
+Anim:RegisterColorSink(function(r, g, b, a)
+    MyFrame:SetBackdropBorderColor(r, g, b, a)
+end, { base = "edge", pulse = true })
+
+-- 动作条背景：只跟随环境氛围，不要低血红
+Anim:RegisterColorSink(function(r, g, b, a)
+    MyBar:SetVertexColor(r, g, b, a)
+end, { base = "ambient", modifiers = { lowHealth = false } })
+
+-- 拉取式
+local r, g, b, a = Anim:GetColor("neutral")
+```
+
+| 文件 | 职责 |
+| :--- | :--- |
+| `LibMonetColor-1.0.lua` | 纯色彩引擎（环境色 / 4 个色彩槽） |
+| `LibMonetColor-Anim-1.0.lua` | 玩家状态采样 + 颜色修饰 + 共享 ticker |
+
+两者可独立使用：只要环境色的项目不需要加载 Anim，也就不会多出事件帧和 ticker。
+
+---
+
 ## 📚 API 摘要
 
 消费者 API（全部为 O(1) 缓存读取）：
@@ -94,6 +131,16 @@ local er, eg, eb, ea,   -- edge
 | `RegisterMapEnv(mapID,h,s,l,name?)` | `bool` | 运行时扩展/覆盖单个地图的环境色（优先于数据模块） |
 | `SetFallbackEnv(h,s,l)` | `bool` | 设置未收录地图的回退环境色（默认中性无彩） |
 | `SetEnvironmentSampler(fn)` | `bool` | 整体替换环境采样器（默认已内置，一般无需调用） |
+
+状态染色层（`LibMonetColor-Anim-1.0`）：
+
+| API | 返回 | 说明 |
+| :--- | :--- | :--- |
+| `RegisterColorSink(fn, opts)` | handle | 订阅最终颜色；`opts.base` / `opts.pulse` / `opts.modifiers` |
+| `GetColor(base, atTime?, modifiers?)` | `r,g,b,a` | 拉取式取色（任意色彩槽或自定义基色） |
+| `GetPlayerState()` | table | 玩家状态（战斗/休息/血量/PvP/载具…） |
+| `SetStyle(tbl)` / `GetStyle()` / `ResetStyle()` | — | 深合并样式 / 读取 / 恢复默认 |
+| `RefreshAll()` | — | 强制重绘所有订阅者 |
 
 生产者 API：
 
@@ -115,10 +162,13 @@ local er, eg, eb, ea,   -- edge
 | :--- | :--- |
 | **永不抛错** | 异常时返回有效 RGB `(0.5, 0.5, 0.5)` |
 | **值域保证** | 所有返回值均在 `[0, 1]` |
-| **事件防抖** | 仅 Delta E > 5.0 时触发 |
-| **输入宽容** | 无效 Profile 回退 `"Monet"`，无效 MapID 回退当前地图 |
+| **事件防抖** | 仅 Delta E > 5.0 时触发（`OnThemeRefreshed` 每次重算必发） |
+| **输入宽容** | 无效 Profile 回退 `"Monet"`，无效 MapID 回退当前地图，非法样式钳制 |
 | **版本兼容** | 1.x 生命周期内公开 API 向后兼容 |
 | **警告冷却** | 重复警告间隔 30 秒 |
+| **消费者隔离** | 某个消费者的回调抛错不影响其它消费者 |
+| **保密值安全** | 血量读不到时只关低血效果，绝不抛错 |
+| **空闲零开销** | 无 sink 无回调时不订阅事件，ticker 不运行 |
 
 ---
 
@@ -128,7 +178,8 @@ local er, eg, eb, ea,   -- edge
 2. **批量读取** —— 需要多种颜色时用 `GetAllThemeColors()`，减少查找次数。
 3. **优雅降级** —— 始终检查 `LibStub` 返回值，库缺失时用插件默认色。
 4. **性能红线** —— 禁止在 `OnUpdate` 中每帧调用颜色 API；使用事件或节流轮询。
-5. **视觉验收** —— 单元测试只保证"不报错"，"好不好看"必须在真实地图上亲眼看。
+5. **状态判定交给库** —— 战斗/低血/休息的判断放在 `LibMonetColor-Anim-1.0`，接入方只负责把返回的 RGBA 画出来。
+6. **视觉验收** —— 单元测试只保证"不报错"，"好不好看"必须在真实地图上亲眼看。
 
 ---
 
@@ -137,30 +188,52 @@ local er, eg, eb, ea,   -- edge
 零依赖，本机安装 [Lua 5.4](https://www.lua.org/) 即可运行测试（无需进入游戏）：
 
 ```bash
-lua test_phase1.lua      # 45 个核心算法测试
-lua test_hardening.lua   # 11 个加固回归测试
-lua test_map_sampler.lua # 16 个 T2.1 地图采样测试
+lua tests/test_phase1.lua        # 45 个核心算法测试
+lua tests/test_hardening.lua     # 14 个加固回归测试
+lua tests/test_map_sampler.lua   # 16 个 T2.1 地图采样测试
+lua tests/test_libstub_order.lua # 4 个 LibStub 加载顺序测试
+lua tests/test_anim_state.lua    # 33 个状态染色 / 取色测试
+lua tests/test_anim_runtime.lua  # 19 个 sink / ticker / 事件运行时测试
 ```
 
-VSCode 用户可直接运行任务：`Run Phase 1 Tests` / `Run Hardening Tests`。
+GitHub Actions 在每次 push / PR 时跑同一组命令（见 `.github/workflows/tests.yml`）。VSCode 用户可直接运行任务：`Run Phase 1 Tests` / `Run Hardening Tests` / `Run Map Sampler Tests` / `Run LibStub Order Tests` / `Run Anim State Tests` / `Run Anim Runtime Tests`。
+
+开发约定（5.1 语法红线、生成文件、提交前检查）见 [`AGENTS.md`](AGENTS.md)，版本变更见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ### 目录结构
 
 ```
-LibMonetColor-1.0.lua         核心库（单文件，惰性加载可选地图数据）
-MonetColorMapData-1.0.lua     14 区域环境色数据模块（自动生成，勿手改）
-LibMonetColor-1.0-API.md      对外接口契约（唯一真理源）
-MonetColorBaseline.lua        v3 莫奈规则基线（7 域 + 6 互补色对）
-test_phase1.lua               核心算法单元测试
-test_hardening.lua            加固回归测试
-test_map_sampler.lua          T2.1 地图采样测试
-gen_map_env.ps1               JSON → 地图数据 Lua 模块生成器
-extract_game_palette_v1.ps1   游戏截图 → 区域调色板取色管线
-game_palette_v1.json          14 区域 × Top8 色样 + env（取色源数据）
-monet_palette_v3.json         15 幅画 × 8 色样（提取源数据）
-monet_red_domain_v3.json      Red/Warm 域专项色样
-Monet_Paintings/MANIFEST.md   原图清单（含尺寸与 SHA-256，原图不入库）
+LibMonetColor-1.0.lua             核心库（单文件，惰性加载可选地图数据）
+LibMonetColor-Anim-1.0.lua        状态染色层（玩家状态 + 颜色修饰 + 共享 ticker）
+LibMonetColor-1.0.toc             独立 addon 声明（内嵌 LibStub；LoadOnDemand）
+Libs/LibStub/LibStub.lua          内嵌 LibStub（Public Domain，勿手改）
+MonetColorMapData-1.0.lua         14 区域环境色数据模块（生成文件，勿手改）
+MonetColorBaseline.lua            v3 规则基线快照（引擎内置副本的来源，运行时不加载）
+LibMonetColor-1.0-API.md          对外接口契约（唯一真理源）
+tests/test_phase1.lua             核心算法单元测试
+tests/test_hardening.lua          加固回归测试
+tests/test_map_sampler.lua        T2.1 地图采样测试
+tests/test_libstub_order.lua      LibStub 加载顺序回归测试
+tests/test_anim_state.lua         状态染色层：取色与修饰测试
+tests/test_anim_runtime.lua       状态染色层：sink / ticker / 事件测试
+tools/gen_map_env.ps1             data/*.json → 地图数据 Lua 模块生成器
+tools/extract_game_palette_v1.ps1 游戏截图 → 区域调色板取色管线
+data/game_palette_v1.json         14 区域 × Top8 色样 + env（取色源数据）
+data/monet_palette_v3.json        15 幅画 × 8 色样（提取源数据）
+data/monet_red_domain_v3.json     Red/Warm 域专项色样
+Monet_Paintings/MANIFEST.md       原图清单（含尺寸与 SHA-256，原图不入库）
+.github/workflows/tests.yml       CI：6 组测试
 ```
+
+> 截图（`Gamepics/`）、莫奈原画（`Monet_Paintings/*.jpg`）、渲染产物与中间态色料 JSON 都只在本地，不入库——见 `.gitignore`。
+
+### 打包与部署
+
+`LibMonetColor-1.0.toc` 是**独立发布**用的声明：它先加载内嵌的 `Libs/LibStub/LibStub.lua`，再加载引擎与数据模块，所以不依赖外部 LibStub 插件。部署时把本目录改名为 `LibMonetColor-1.0` 放进 `Interface/AddOns/`（文件夹名必须与 `.toc` 同名）。`## LoadOnDemand: 1` 表示不会被自动加载，需由消费方用 `## OptionalDeps: LibMonetColor-1.0` 或 `LoadAddOn` 拉起。
+
+以 vendored 方式接入（MonetUI 当前做法）：把 `LibMonetColor-1.0.lua`、`LibMonetColor-Anim-1.0.lua`、`MonetColorMapData-1.0.lua` 和 `Libs/LibStub/LibStub.lua` 拷进消费方插件的 `Libs/`，按顺序在 `.toc` 里登记即可。
+
+> ⚠️ 同一个客户端里**不要同时**存在"独立 addon"与"被消费方 vendored 的副本"：两份都会向 LibStub 注册同一 MAJOR，本能升级守卫会让第二份直接退出，实际生效的是加载顺序靠前的那份，另一份的缓存与事件帧白跑。二选一即可（当前 MonetUI 走的是 vendored 方式）。
 
 ---
 
@@ -169,11 +242,12 @@ Monet_Paintings/MANIFEST.md   原图清单（含尺寸与 SHA-256，原图不入
 - ✅ **Phase 1** 核心算法（HSL 转换 / 莫奈规则引擎 / Delta E 缓存防抖 / 生产者 API）
 - ✅ **+ 加固** LibStub 注册、Profile 生效、按地图采样、R-01 Alpha 公式
 - ✅ **Phase 2 (T2.1)** 真实地图色彩采样：`MonetColorMapData-1.0` 数据模块（14 区域，截图取色管线产出）+ 解析链（覆盖 → 数据 → 父地图 → 回退）+ 16 项测试
+- ✅ **1.1.0 状态染色层** `LibMonetColor-Anim-1.0`：玩家状态 → 颜色修饰（战斗增亮 / 进入战斗闪烁 / 战斗脉搏 / 低血红与加速脉搏 / 脱战降亮 / 休息冷调 / PvP / 载具 / 死亡灰化）+ 单共享 ticker + 52 项测试
 - 🔜 **Phase 2** TestHarness 插件（T2.2）、三地图视觉验收（T2.3）
-- 🔜 **Phase 3** 发布与打包
+- 🔜 **Phase 3** 打包分发（CurseForge / Wago 式独立包）
 
 ---
 
 ## 协议
 
-MIT License. 莫奈画作源数据来自 Wikimedia Commons（公有领域）。
+[MIT License](LICENSE) © 2026 EastHillGui。莫奈画作源数据来自 Wikimedia Commons（公有领域），原图不入库，清单见 [`Monet_Paintings/MANIFEST.md`](Monet_Paintings/MANIFEST.md)。
