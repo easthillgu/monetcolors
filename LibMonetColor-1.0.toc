@@ -2,7 +2,7 @@
 ## Title: LibMonetColor-1.0
 ## Notes: Monet-style adaptive environment colour engine. Derives an adaptive "5+3" theme (edge glow / ambient tint / highlight wash + Monet neutral) from the player's current zone, plus an optional state layer that tints any UI with the player's combat / rest / health state.
 ## Author: EastHillGu
-## Version: 1.1.0
+## Version: 1.2.0
 ## X-Category: Library
 ## X-Website: https://github.com/easthillgu/monetcolors
 ## OptionalDeps: CallbackHandler-1.0

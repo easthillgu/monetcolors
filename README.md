@@ -132,6 +132,13 @@ local r, g, b, a = Anim:GetColor("neutral")
 | `SetFallbackEnv(h,s,l)` | `bool` | 设置未收录地图的回退环境色（默认中性无彩） |
 | `SetEnvironmentSampler(fn)` | `bool` | 整体替换环境采样器（默认已内置，一般无需调用） |
 
+色彩工具函数（1.2.0，**纯函数**：不读缓存、不发事件）：
+
+| API | 返回 | 说明 |
+| :--- | :--- | :--- |
+| `ContrastRatio(r1,g1,b1, r2,g2,b2)` | `number >= 1` | WCAG 2.x 对比度；1.0 = 等亮看不出。读不出的分量**返回 1**（保守答"分不开"） |
+| `AtLightness(r,g,b, targetL)` | `r,g,b` | 保住色相与饱和度，按 CIE L\* 重定位亮度；目标够不到时返回最接近的那个 |
+
 状态染色层（`LibMonetColor-Anim-1.0`）：
 
 | API | 返回 | 说明 |
@@ -194,11 +201,12 @@ lua tests/test_map_sampler.lua   # 16 个 T2.1 地图采样测试
 lua tests/test_libstub_order.lua # 4 个 LibStub 加载顺序测试
 lua tests/test_anim_state.lua    # 33 个状态染色 / 取色测试
 lua tests/test_anim_runtime.lua  # 19 个 sink / ticker / 事件运行时测试
+lua tests/test_color_tools.lua   # 24 个色彩工具函数测试（对比度 / L* 重定位）
 ```
 
-GitHub Actions 在每次 push / PR 时跑同一组命令（见 `.github/workflows/tests.yml`）。VSCode 用户可直接运行任务：`Run Phase 1 Tests` / `Run Hardening Tests` / `Run Map Sampler Tests` / `Run LibStub Order Tests` / `Run Anim State Tests` / `Run Anim Runtime Tests`。
+GitHub Actions 在每次 push / PR 时跑同一组命令（见 `.github/workflows/tests.yml`，按 `tests/test_*.lua` 通配）。VSCode 用户可直接运行任务：`Run Phase 1 Tests` / `Run Hardening Tests` / `Run Map Sampler Tests` / `Run LibStub Order Tests` / `Run Anim State Tests` / `Run Anim Runtime Tests`。
 
-版本变更见 [`CHANGELOG.md`](CHANGELOG.md)；提交前请先跑上面 6 组测试，全部 `PASSED` 再提交。
+版本变更见 [`CHANGELOG.md`](CHANGELOG.md)；提交前请先跑上面 7 组测试，全部 `PASSED` 再提交。
 
 ### 目录结构
 
@@ -216,13 +224,14 @@ tests/test_map_sampler.lua        T2.1 地图采样测试
 tests/test_libstub_order.lua      LibStub 加载顺序回归测试
 tests/test_anim_state.lua         状态染色层：取色与修饰测试
 tests/test_anim_runtime.lua       状态染色层：sink / ticker / 事件测试
+tests/test_color_tools.lua        色彩工具函数：对比度 / L* 重定位
 tools/gen_map_env.ps1             data/*.json → 地图数据 Lua 模块生成器
 tools/extract_game_palette_v1.ps1 游戏截图 → 区域调色板取色管线
 data/game_palette_v1.json         14 区域 × Top8 色样 + env（取色源数据）
 data/monet_palette_v3.json        15 幅画 × 8 色样（提取源数据）
 data/monet_red_domain_v3.json     Red/Warm 域专项色样
 Monet_Paintings/MANIFEST.md       原图清单（含尺寸与 SHA-256，原图不入库）
-.github/workflows/tests.yml       CI：6 组测试
+.github/workflows/tests.yml       CI：7 组测试
 ```
 
 > 截图（`Gamepics/`）、莫奈原画（`Monet_Paintings/*.jpg`）、渲染产物与中间态色料 JSON 都只在本地，不入库——见 `.gitignore`。
@@ -243,6 +252,8 @@ Monet_Paintings/MANIFEST.md       原图清单（含尺寸与 SHA-256，原图�
 - ✅ **+ 加固** LibStub 注册、Profile 生效、按地图采样、R-01 Alpha 公式
 - ✅ **Phase 2 (T2.1)** 真实地图色彩采样：`MonetColorMapData-1.0` 数据模块（14 区域，截图取色管线产出）+ 解析链（覆盖 → 数据 → 父地图 → 回退）+ 16 项测试
 - ✅ **1.1.0 状态染色层** `LibMonetColor-Anim-1.0`：玩家状态 → 颜色修饰（战斗增亮 / 进入战斗闪烁 / 战斗脉搏 / 低血红与加速脉搏 / 脱战降亮 / 休息冷调 / PvP / 载具 / 死亡灰化）+ 单共享 ticker + 52 项测试
+- ✅ **1.2.0 色彩工具函数** `ContrastRatio`（WCAG 对比度）/ `AtLightness`（按 CIE L\* 重定位，保色相保饱和）——纯函数，接入方自己排亮度阶梯；补的是决策日志 **R-04** 预留的口子（对比度校验不内置进主题计算），+ 24 项测试
+- 🔜 **数据覆盖** 1.60 客户端共 50 张区域图 + 6 座首都，数据表只覆盖 12 + 2：**四个新手区**（杜隆塔尔 / 莫高雷 / 泰达希尔 / 丹莫罗）与**联盟首都**全部缺席，且没有**大陆/世界层**的行（1414 / 1415 / 947）可让父链接住，未覆盖区域直落冷蓝回退
 - 🔜 **Phase 2** TestHarness 插件（T2.2）、三地图视觉验收（T2.3）
 - 🔜 **Phase 3** 打包分发（CurseForge / Wago 式独立包）
 

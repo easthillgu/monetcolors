@@ -1,14 +1,15 @@
 -- LibMonetColor-1.0.lua
--- Monet Color Engine v1.0.1
+-- Monet Color Engine v1.2.0
 -- A WoW dynamic environment color computation engine based on Impressionist color rules.
 -- Provides adaptive "5+3" theme colors for UI plugins.
 --
 -- Dependencies: LibStub (vendored in Libs/, or provided by the consumer)
 -- Optional: CallbackHandler-1.0 (a built-in registry is used when absent)
 -- Optional data: MonetColorMapData-1.0 (mapID -> environment color table)
--- License: MAJOR = "LibMonetColor-1.0", MINOR = 10002
+-- License: MIT
+-- Version: MAJOR = "LibMonetColor-1.0", MINOR = 10003
 
-local MAJOR, MINOR = "LibMonetColor-1.0", 10002
+local MAJOR, MINOR = "LibMonetColor-1.0", 10003
 
 -- Only a real LibStub (a table exposing NewLibrary) counts. A bare function
 -- under _G.LibStub is our own standalone shim from a previous load, and must
@@ -901,7 +902,7 @@ function LMC:GetActiveProfile()
 end
 
 -- ============================================================================
--- SECTION 8: Utility API (exposed for advanced users / testing)
+-- SECTION 8: Utility API + Color Tools (pure functions: no cache, no events)
 -- ============================================================================
 
 --- Access the active rules table (defaults-filled for custom profiles).
@@ -929,6 +930,123 @@ function LMC:ClearCache()
             LMC.colorCache[k] = nil
         end
     end
+end
+
+-- ---------------------------------------------------------------------------
+-- Color Tools (1.2.0)
+--
+-- Pure functions that read nothing but their arguments. They exist because the
+-- *strategy* layer above this library has to lay its own lightness ladder (bar
+-- fill vs. empty slot vs. panel background) and this chunk is the only place
+-- with Lab / L* maths. Deliberately not wired into the cache or the event
+-- debounce: contrast is the consumer's business, the numbers are ours.
+-- ---------------------------------------------------------------------------
+
+local LIGHTNESS_TOLERANCE = 0.25  -- CIE L* units considered "close enough"
+local LIGHTNESS_MAX_ITERS = 24    -- bisection steps over the HSL lightness axis
+
+--- Read a number and clamp it to [lo, hi]. Returns nil for anything we cannot
+--- read: a missing field, a non-numeric string, NaN, or a secret value that
+--- errors the moment it is coerced. Callers turn that nil into their own
+--- never-throw answer, so "unreadable" never silently becomes a colour.
+local function readNumber(v, lo, hi)
+    local ok, n = pcall(function()
+        local x = tonumber(v)
+        if type(x) ~= "number" then return nil end
+        if x ~= x then return nil end
+        if x < lo then return lo end
+        if x > hi then return hi end
+        return x
+    end)
+    if not ok then return nil end
+    return n
+end
+
+local function readComponent(v)
+    return readNumber(v, 0, 1)
+end
+
+--- Read three sRGB components, or nil if any one of them is unreadable.
+local function readTriad(r, g, b)
+    local cr = readComponent(r)
+    local cg = readComponent(g)
+    local cb = readComponent(b)
+    if not cr or not cg or not cb then return nil end
+    return cr, cg, cb
+end
+
+--- WCAG 2.x contrast ratio between two sRGB colors.
+-- Order-independent, >= 1; 1.0 means the two colors are equally light.
+-- An unreadable argument answers 1 on purpose: the conservative conclusion is
+-- "not distinguishable", never a flattering number built out of a guess.
+-- @param r1, g1, b1  number [0,1]  color A
+-- @param r2, g2, b2  number [0,1]  color B
+-- @return ratio number
+function LMC.ContrastRatio(r1, g1, b1, r2, g2, b2)
+    local a1, a2, a3 = readTriad(r1, g1, b1)
+    local b1v, b2v, b3v = readTriad(r2, g2, b2)
+    if not a1 or not b1v then
+        warn("ContrastRatio: unreadable color argument")
+        return 1
+    end
+    local ok, ratio = pcall(function()
+        -- RGBToXYZ gamma-decodes sRGB, so its Y is exactly the relative
+        -- luminance WCAG wants -- and it is the same decode RGBToLab uses.
+        local _, y1 = RGBToXYZ(a1, a2, a3)
+        local _, y2 = RGBToXYZ(b1v, b2v, b3v)
+        if y1 < y2 then y1, y2 = y2, y1 end
+        return (y1 + 0.05) / (y2 + 0.05)
+    end)
+    if ok then return ratio end
+    warn("ContrastRatio failed: " .. tostring(ratio))
+    return 1
+end
+
+--- Move a color onto a target CIE L*, keeping its hue and saturation.
+-- L* is monotone in HSL lightness for a fixed hue/saturation, so bisection is
+-- exact enough and cheap. When the target is out of gamut for that hue the
+-- closest reachable color comes back -- the color never silently changes hue.
+-- Cost: up to LIGHTNESS_MAX_ITERS HSL->RGB->Lab rounds. Call it when the theme
+-- refreshes and cache the result, not per frame or per unit.
+-- @param r, g, b  number [0,1]  source color
+-- @param targetL  number [0,100] desired CIE L* (clamped)
+-- @return r, g, b  number [0,1]; the contract's neutral grey for unreadable input
+function LMC.AtLightness(r, g, b, targetL)
+    local cr, cg, cb = readTriad(r, g, b)
+    if not cr then
+        warn("AtLightness: unreadable color argument")
+        return 0.5, 0.5, 0.5
+    end
+    local target = readNumber(targetL, 0, 100)
+    if not target then return cr, cg, cb end
+
+    local ok, outR, outG, outB = pcall(function()
+        local current = LMC.RGBToLab(cr, cg, cb)
+        if math.abs(current - target) <= LIGHTNESS_TOLERANCE then
+            return cr, cg, cb
+        end
+
+        local h, s = LMC.RGBToHSL(cr, cg, cb)
+        local lo, hi = 0, 1
+        local bestR, bestG, bestB = cr, cg, cb
+        local bestErr = math.abs(current - target)
+        for _ = 1, LIGHTNESS_MAX_ITERS do
+            local mid = (lo + hi) / 2
+            local tr, tg, tb = LMC.HSLToRGB(h, s, mid)
+            local tl = LMC.RGBToLab(tr, tg, tb)
+            local err = math.abs(tl - target)
+            if err < bestErr then
+                bestErr = err
+                bestR, bestG, bestB = tr, tg, tb
+                if err <= LIGHTNESS_TOLERANCE then break end
+            end
+            if tl < target then lo = mid else hi = mid end
+        end
+        return bestR, bestG, bestB
+    end)
+    if ok then return outR, outG, outB end
+    warn("AtLightness failed: " .. tostring(outR))
+    return 0.5, 0.5, 0.5
 end
 
 -- ============================================================================
