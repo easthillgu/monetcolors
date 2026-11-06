@@ -1,0 +1,196 @@
+{
+  "generated": "2026-11-07",
+  "source": "https://wuxianwow.com/trip（艾泽拉斯旅拍）经 MCP 工具 trip 取点；数据取自国服客户端 1.60.1.70790",
+  "params": {
+    "time": "day",
+    "camera": "不带 cam 参数（默认第三人称、相机面板不打开 → 画面无 UI 覆盖）"
+  },
+  "shot_format": "全屏截图裁剪 x∈[0,975) y∈[160,1390)：排除顶部工具条/左上地名牌/任务栏/右侧滚动条与中轴人物；JPEG q92。",
+  "note": "每区取景点见 entries.point（把 place 交给 MCP trip 即得同一 URL）。对照组 control=true 的条目不进主数据，偏差见 data/source_bias.json。暴风城原坐标 52.1,48.6 让场景空白，改用 50.6,53.5。",
+  "entries": [
+    {
+      "zone": "杜隆塔尔",
+      "mapID": 1411,
+      "point": [
+        "46.2,58.4"
+      ],
+      "files": [
+        "杜隆塔尔-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=1,-250.3,-4405.3&t=day",
+      "control": false,
+      "ground": "地面",
+      "title": "杜隆塔尔 46.2, 58.4，卡利姆多"
+    },
+    {
+      "zone": "莫高雷",
+      "mapID": 1412,
+      "point": [
+        "44.8,55.1"
+      ],
+      "files": [
+        "莫高雷-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=1,-1993.6,-277.9&t=day",
+      "control": false,
+      "ground": "地面",
+      "title": "莫高雷 44.8, 55.1（雷角水井附近），卡利姆多"
+    },
+    {
+      "zone": "丹莫罗",
+      "mapID": 1426,
+      "point": [
+        "49.5,62.8"
+      ],
+      "files": [
+        "丹莫罗-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=0,-5939.0,-635.8&t=day",
+      "control": false,
+      "ground": "地面",
+      "title": "丹莫罗 49.5, 62.8（卡拉诺斯附近），东部王国"
+    },
+    {
+      "zone": "泰达希尔",
+      "mapID": 1438,
+      "point": [
+        "55.4,52.1"
+      ],
+      "files": [
+        "泰达希尔-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=1,10063.1,993.8&t=day",
+      "control": false,
+      "ground": "陡坡",
+      "title": "泰达希尔 55.4, 52.1（多兰纳尔附近），卡利姆多"
+    },
+    {
+      "zone": "艾尔文森林",
+      "mapID": 1429,
+      "point": [
+        "42.5,65.7",
+        "55.2,47.3"
+      ],
+      "files": [
+        "艾尔文森林-ctrl1.jpg",
+        "艾尔文森林-ctrl2.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=0,-9034.4,-380.5&t=day",
+      "control": true,
+      "ground": "地面",
+      "title": "艾尔文森林 55.2, 47.3，东部王国"
+    },
+    {
+      "zone": "暴风城",
+      "mapID": 1453,
+      "point": [
+        "50.6,53.5"
+      ],
+      "files": [
+        "暴风城-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=0,-8615.5,843.7&t=day",
+      "control": false,
+      "ground": "建筑上的地面",
+      "title": "暴风城 50.6, 53.5，东部王国"
+    },
+    {
+      "zone": "铁炉堡",
+      "mapID": 1455,
+      "point": [
+        "48.9,55.3"
+      ],
+      "files": [
+        "铁炉堡-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=0,-4861.0,-1100.2&t=day",
+      "control": false,
+      "ground": "地面",
+      "title": "丹莫罗 58.9, 30.0，东部王国"
+    },
+    {
+      "zone": "雷霆崖",
+      "mapID": 1456,
+      "point": [
+        "57.2,51.8"
+      ],
+      "files": [
+        "雷霆崖-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=1,-1210.4,-80.4&t=day",
+      "control": false,
+      "ground": "地面",
+      "title": "雷霆崖 57.2, 51.8，卡利姆多"
+    },
+    {
+      "zone": "达纳苏斯",
+      "mapID": 1457,
+      "point": [
+        "51.3,47.9"
+      ],
+      "files": [
+        "达纳苏斯-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=1,9900.3,2395.4&t=day",
+      "control": false,
+      "ground": "深水",
+      "title": "达纳苏斯 51.3, 47.9，卡利姆多"
+    },
+    {
+      "zone": "海加尔山",
+      "mapID": 2482,
+      "point": [
+        "47.6,53.2"
+      ],
+      "files": [
+        "海加尔山-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=1,5072.8,-2576.0&t=day",
+      "control": false,
+      "ground": "陡坡",
+      "title": "海加尔山 47.6, 53.2，卡利姆多"
+    },
+    {
+      "zone": "河林",
+      "mapID": 2548,
+      "point": [
+        "45.3,57.6"
+      ],
+      "files": [
+        "河林-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=0,-8329.1,-4088.7&t=day",
+      "control": false,
+      "ground": "浅水",
+      "title": "河林 45.3, 57.6，东部王国"
+    },
+    {
+      "zone": "辛德拉",
+      "mapID": 2652,
+      "point": [
+        "53.8,46.5"
+      ],
+      "files": [
+        "辛德拉-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=1,-2535.5,922.1&t=day",
+      "control": false,
+      "ground": "地面",
+      "title": "辛德拉 53.8, 46.5，卡利姆多"
+    },
+    {
+      "zone": "灰谷",
+      "mapID": 1440,
+      "point": [
+        "40.5,56.4"
+      ],
+      "files": [
+        "灰谷-ctrl1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=1,2505.0,-635.5&t=day",
+      "control": true,
+      "ground": "地面",
+      "title": "灰谷 40.5, 56.4（阿斯特兰纳附近），卡利姆多"
+    }
+  ]
+}
