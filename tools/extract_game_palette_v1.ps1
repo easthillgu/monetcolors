@@ -6,7 +6,17 @@
 #       同区域多图合并统计; 附带 env (全分布加权 HSL) 供采样器使用。
 # UI 遮罩: 带完整 UI 的截图按比例矩形排除 UI 区域后再统计。
 # 输出: game_palette_v1.json + GamePalette_v1.html (含缩略图与遮罩示意)
+#
+# 2026-11-07 增加两个开关（为了把"网页渲染 vs 游戏截图"两种来源分开验证）：
+#   -IncludeControl  只跑带 control 标记的条目（艾尔文森林 trip 对照组），用于量化来源偏差
+#   -OutFile <path>  输出 JSON 路径（默认 data\game_palette_v1.json）
+#   -SkipHtml        不写 GamePalette_v1.html（对照组只想要数字，不要报告）
 # ============================================================
+param(
+    [switch]$IncludeControl,
+    [string]$OutFile = "",
+    [switch]$SkipHtml
+)
 Add-Type -AssemblyName System.Drawing
 
 $ErrorActionPreference = "Stop"
@@ -25,6 +35,10 @@ $maskFiles = @("贫瘠之地.jpg", "贫瘠之地2.jpg", "泽风岛2.jpg")
 
 # ---- 区域定义 (mapID 取自 wuxianwow 图鉴, 经典 mapID 空间) ----
 # 注意: 闪光平原是千针石林的子区域, 游戏内 GetBestMapForUnit 同返回 1441, 故合并统计。
+# source: "game" = 游戏内截图（2026-10 那批）; "trip" = 艾泽拉斯旅拍网页3D 渲染截图
+#   （https://wuxianwow.com/trip, MCP trip 工具按区域随机坐标取点、time=day、camera=风景机位）。
+#   网页截图**没有 HUD** ⇒ 不进 $maskFiles（遮罩是逐文件 opt-in, 见下方提取循环）。
+#   两条来源的 env 口径差异见 data/source_bias.json（对照区 艾尔文森林 各拍一次比出来的）。
 $zones = @(
     @{ zone = "贫瘠之地";         mapID = 1413; files = @("贫瘠之地.jpg", "贫瘠之地2.jpg") }
     @{ zone = "阿拉希高地";       mapID = 1417; files = @("阿拉希高地.jpg", "阿拉希高地2.jpg") }
@@ -40,6 +54,28 @@ $zones = @(
     @{ zone = "奥格瑞玛";         mapID = 1454; files = @("奥格瑞玛.jpg") }
     @{ zone = "幽暗城";           mapID = 1458; files = @("幽暗城.jpg") }
     @{ zone = "泽风岛";           mapID = 2521; files = @("泽风岛.jpg", "泽风岛2.jpg", "泽风岛3.jpg") }
+
+    # ---- trip 来源（艾泽拉斯旅拍网页 3D 渲染, 2026-11-07 取点）：覆盖 HANDOFF §8.14.2 列的
+    #      缺口 —— 四个新手区 / 四个首都 / 三个 1.60 新区。每区一个取景点（坐标与链接见
+    #      data/trip_sources.json，可复现）。全部 t=day（与游戏内那批的白昼口径一致）、
+    #      无相机参数（相机面板不打开 → 画面无 UI 覆盖），截图再裁掉顶部工具条/任务栏/中轴人物。
+    @{ zone = "杜隆塔尔";         mapID = 1411; files = @("杜隆塔尔-trip1.jpg");     source = "trip" }
+    @{ zone = "莫高雷";           mapID = 1412; files = @("莫高雷-trip1.jpg");       source = "trip" }
+    @{ zone = "丹莫罗";           mapID = 1426; files = @("丹莫罗-trip1.jpg");       source = "trip" }
+    @{ zone = "泰达希尔";         mapID = 1438; files = @("泰达希尔-trip1.jpg");     source = "trip" }
+    @{ zone = "暴风城";           mapID = 1453; files = @("暴风城-trip1.jpg");       source = "trip"; note = "坐标换过一次：52.1,48.6 的取景点让场景空白，改用 50.6,53.5（贸易区地面）" }
+    @{ zone = "铁炉堡";           mapID = 1455; files = @("铁炉堡-trip1.jpg");       source = "trip" }
+    @{ zone = "雷霆崖";           mapID = 1456; files = @("雷霆崖-trip1.jpg");       source = "trip" }
+    @{ zone = "达纳苏斯";         mapID = 1457; files = @("达纳苏斯-trip1.jpg");     source = "trip" }
+    @{ zone = "海加尔山";         mapID = 2482; files = @("海加尔山-trip1.jpg");     source = "trip" }
+    @{ zone = "河林";             mapID = 2548; files = @("河林-trip1.jpg");         source = "trip" }
+    @{ zone = "辛德拉";           mapID = 2652; files = @("辛德拉-trip1.jpg");       source = "trip"; note = "重雾单调地貌, 量化色仅 33 种属正常（雾+单色坡）" }
+
+    # ---- 对照组：**同一区**的 trip 版本。**默认不进主数据**（-IncludeControl 才跑），
+    #      用途 = 量化"网页渲染 vs 游戏截图"两种来源的 env 偏差（结果写 data/source_bias.json）。
+    #      选这两个区是因为 S/L 两轴都敏感：艾尔文森林（暖绿、中饱和）、灰谷（浓绿、高饱和）。
+    @{ zone = "艾尔文森林(trip对照)"; mapID = 1429; files = @("艾尔文森林-ctrl1.jpg", "艾尔文森林-ctrl2.jpg"); source = "trip"; control = $true }
+    @{ zone = "灰谷(trip对照)";     mapID = 1440; files = @("灰谷-ctrl1.jpg");     source = "trip"; control = $true }
 )
 
 function Convert-RGBtoHSL($r, $g, $b) {
@@ -175,6 +211,8 @@ function Get-TopColors([hashtable]$colorMap, [int]$topN) {
 # ---------- 提取 ----------
 $results = @()
 foreach ($z in $zones) {
+    # 对照组条目默认排除；带 -IncludeControl 时则只跑对照组（两份结果互不混）
+    if ($IncludeControl) { if (-not $z.control) { continue } } else { if ($z.control) { continue } }
     $colorMap = @{}
     $maskedFiles = @()
     $totalMasked = 0
@@ -191,6 +229,7 @@ foreach ($z in $zones) {
     $results += @{
         zone        = $z.zone
         mapID       = $z.mapID
+        source      = $(if ($z.source) { [string]$z.source } else { "game" })
         files       = @($z.files)
         uiMasked    = @($maskedFiles)
         maskedPx    = $totalMasked
@@ -202,10 +241,11 @@ foreach ($z in $zones) {
 }
 
 $json = $results | ConvertTo-Json -Depth 6
-$outJson = Join-Path $root "data\game_palette_v1.json"
+if ($OutFile) { $outJson = $OutFile } else { $outJson = Join-Path $root "data\game_palette_v1.json" }
 [System.IO.File]::WriteAllText($outJson, $json, [System.Text.UTF8Encoding]::new($false))
 Write-Host "Saved: $outJson"
 
+if (-not $SkipHtml) {
 # ---------- HTML 色卡报告 ----------
 function Get-JpegBase64([System.Drawing.Bitmap]$bmp, [long]$quality) {
     $codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq "image/jpeg" }
@@ -269,7 +309,9 @@ code{background:#22262d;padding:1px 5px;border-radius:4px;font-size:12px}
 </style></head><body>
 '@)
 [void]$sb.AppendLine('<h1>WoW 区域调色板 v1</h1>')
-[void]$sb.AppendLine('<div class="sub">源: Gamepics 19 张截图 · 9 区域 · 提取口径: 缩放 400px → RGB 步长 16 量化 → 滤除 L&lt;0.08 / L&gt;0.94 / 近黑 / 近白 → Top8 · <b>env</b> 为全部有效色块的频次加权 (色相取圆周均值)</div>')
+$totalFiles = (@($results | ForEach-Object { $_.files })).Count
+$tripCount = (@($results | Where-Object { $_.source -eq "trip" })).Count
+[void]$sb.AppendLine("<div class=""sub"">源: Gamepics $totalFiles 张截图 · $($results.Count) 区域 · trip 来源 $tripCount · 提取口径: 缩放 400px → RGB 步长 16 量化 → 滤除 L&lt;0.08 / L&gt;0.94 / 近黑 / 近白 → Top8 · <b>env</b> 为全部有效色块的频次加权 (色相取圆周均值)</div>")
 [void]$sb.AppendLine('<div class="legend">用途: <code>SetEnvironmentSampler(fn)</code> 的区域 Palette 数据源 (Phase 2 / T2.1)。同区域多图按像素频次合并; 带 UI 的截图以比例矩形遮罩排除界面 (缩略图中<span style="color:#e08090">红色半透明区域</span>不参与统计)。</div>')
 
 foreach ($r in $results) {
@@ -315,3 +357,4 @@ $outHtml = Join-Path $root "GamePalette_v1.html"
 Write-Host "Saved: $outHtml"
 Write-Host ""
 Write-Host "=== Done! ==="
+} # end if (-not $SkipHtml)
