@@ -6,7 +6,7 @@
     "camera": "不带 cam 参数（默认第三人称、相机面板不打开 → 画面无 UI 覆盖）"
   },
   "shot_format": "全屏截图裁剪 x∈[0,975) y∈[160,1390)：排除顶部工具条/左上地名牌/任务栏/右侧滚动条与中轴人物；JPEG q92。",
-  "note": "每区取景点见 entries.point（把 place 交给 MCP trip 即得同一 URL）。对照组 control=true 的条目不进主数据，偏差见 data/source_bias.json。暴风城原坐标 52.1,48.6 让场景空白，改用 50.6,53.5。",
+  "note": "每区取景点见 entries.point（把 place 交给 MCP trip 即得同一 URL）。对照组 control=true 的条目不进主数据，偏差见 data/source_bias.json。暴风城原坐标 52.1,48.6 让场景空白，改用 50.6,53.5。 2026-11-08：新增 7 个 format=v2 条目；幽暗城 1458 的 trip 取点全部落在「提瑞斯法林地 · 洛丹伦废墟」地表而非地下城内部，语义不符，有意保留 game 色。",
   "entries": [
     {
       "zone": "杜隆塔尔",
@@ -191,6 +191,119 @@
       "control": true,
       "ground": "地面",
       "title": "灰谷 40.5, 56.4（阿斯特兰纳附近），卡利姆多"
+    },
+    {
+      "zone": "阿拉希高地",
+      "mapID": 1417,
+      "point": [
+        "60,40"
+      ],
+      "files": [
+        "阿拉希高地-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=0,-1093.3,-3026.7&t=day",
+      "control": false,
+      "ground": "地面",
+      "title": "阿拉希高地 60.0, 40.0，东部王国",
+      "format": "v2"
+    },
+    {
+      "zone": "提瑞斯法林地",
+      "mapID": 1420,
+      "point": [
+        "45,55"
+      ],
+      "files": [
+        "提瑞斯法林地-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=0,2180.6,999.9&t=day",
+      "control": false,
+      "ground": "地面",
+      "title": "提瑞斯法林地 45.0, 55.0（静水池附近），东部王国",
+      "format": "v2"
+    },
+    {
+      "zone": "银松森林",
+      "mapID": 1421,
+      "point": [
+        "50,60"
+      ],
+      "files": [
+        "银松森林-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=0,-13.3,1350.0&t=day",
+      "control": false,
+      "ground": "地面（坡 4°）",
+      "title": "银松森林 50.0, 60.0（营地附近），东部王国；原 60,40 贴地糊绿已弃",
+      "format": "v2"
+    },
+    {
+      "zone": "希尔斯布莱德丘陵",
+      "mapID": 1424,
+      "point": [
+        "45,55"
+      ],
+      "files": [
+        "希尔斯布莱德丘陵-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=0,-773.3,-373.3&t=day",
+      "control": false,
+      "ground": "地面（坡 10°）",
+      "title": "希尔斯布莱德丘陵 45.0, 55.0（南海镇附近），东部王国",
+      "format": "v2"
+    },
+    {
+      "zone": "艾尔文森林",
+      "mapID": 1429,
+      "point": [
+        "45,55"
+      ],
+      "files": [
+        "艾尔文森林-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=0,-9212.6,-26.5&t=day",
+      "control": false,
+      "ground": "地面（坡 8°）",
+      "title": "艾尔文森林 45.0, 55.0，东部王国",
+      "format": "v2"
+    },
+    {
+      "zone": "西部荒野",
+      "mapID": 1436,
+      "point": [
+        "45,55"
+      ],
+      "files": [
+        "西部荒野-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=0,-10683.3,1441.7&t=day",
+      "control": false,
+      "ground": "地面（坡 8°）",
+      "title": "西部荒野 45.0, 55.0（斯特登的池塘），东部王国",
+      "format": "v2"
+    },
+    {
+      "zone": "奥格瑞玛",
+      "mapID": 1454,
+      "point": [
+        "45,55"
+      ],
+      "files": [
+        "奥格瑞玛-trip1.jpg"
+      ],
+      "url": "https://wuxianwow.com/trip?at=1,1759.4,-4311.8&t=day",
+      "control": false,
+      "ground": "建筑上的地面",
+      "title": "奥格瑞玛 45.0, 55.0，卡利姆多；画面以红土地表为主，与旧 game 色同为橙红系",
+      "format": "v2"
+    }
+  ],
+  "shot_format_v2": "2026-11-08 补拍：wuxianwow /trip 相机「风景」模式（第一人称、人物隐藏）、3:4、24mm、t=day，点「保存原图」导出 1536x2048 PNG（无 UI / 无地名 / 无二维码），转 JPEG q92 存 Gamepics。与 v1（屏幕截图裁剪）构图口径不同，env 整体 s 更高 / l 更低，不做比例校正，见 tools/extract_game_palette_v1.ps1 头部。",
+  "skipped": [
+    {
+      "zone": "幽暗城",
+      "mapID": 1458,
+      "reason": "MCP trip 对「幽暗城 45,55 / 60,40」的取点都返回「提瑞斯法林地 · 洛丹伦废墟附近」地表，非地下城内部；若据此提色会把城外林地的绿/土色当成幽暗城，故保留游戏截图色（source=game）。"
     }
   ]
 }

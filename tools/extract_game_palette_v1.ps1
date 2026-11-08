@@ -39,21 +39,33 @@ $maskFiles = @("贫瘠之地.jpg", "贫瘠之地2.jpg", "泽风岛2.jpg")
 #   （https://wuxianwow.com/trip, MCP trip 工具按区域随机坐标取点、time=day、camera=风景机位）。
 #   网页截图**没有 HUD** ⇒ 不进 $maskFiles（遮罩是逐文件 opt-in, 见下方提取循环）。
 #   两条来源的 env 口径差异见 data/source_bias.json（对照区 艾尔文森林 各拍一次比出来的）。
+#   2026-11-08 新增 trip v2 口径：相机「风景」模式 → 「保存原图」导出 1536x2048 PNG（无 UI/人物/二维码），
+#   与 11-07 的 v1（屏幕截图裁剪）构图不同；v2 整体 s 更高、l 更低（均值 0.652/0.248 vs v1 0.42/0.363），
+#   属取图口径差，不做比例校正（依据 source_bias.json 的 verdict），靠 data/trip_sources.json 的 format 留账。
 $zones = @(
     @{ zone = "贫瘠之地";         mapID = 1413; files = @("贫瘠之地.jpg", "贫瘠之地2.jpg") }
-    @{ zone = "阿拉希高地";       mapID = 1417; files = @("阿拉希高地.jpg", "阿拉希高地2.jpg") }
-    @{ zone = "提瑞斯法林地";     mapID = 1420; files = @("提瑞斯法林地.jpg", "提瑞斯法林地2.jpg") }
-    @{ zone = "银松森林";         mapID = 1421; files = @("银松森林.jpg", "银松森林2.jpg", "银松森林3.jpg") }
-    @{ zone = "希尔斯布莱德丘陵"; mapID = 1424; files = @("希尔斯布莱德丘陵.jpg", "希尔斯布莱德丘陵2.jpg") }
-    @{ zone = "艾尔文森林";       mapID = 1429; files = @("艾尔文森林.jpg", "艾尔文森林2.jpg") }
-    @{ zone = "西部荒野";         mapID = 1436; files = @("西部荒野.jpg", "西部荒野2.jpg", "西部荒野3.jpg") }
     @{ zone = "灰谷";             mapID = 1440; files = @("灰谷.jpg", "灰谷2.jpg", "灰谷3.jpg", "灰谷4.jpg", "灰谷5.jpg", "灰谷6.jpg", "灰谷7.jpg") }
     @{ zone = "千针石林(含闪光平原)"; mapID = 1441; files = @("千针石林.jpg", "千针石林2.jpg", "千针石林3.jpg", "千针石林4.jpg", "闪光平原.jpg", "闪光平原2.jpg") }
     @{ zone = "菲拉斯";           mapID = 1444; files = @("菲拉斯.jpg", "菲拉斯2.jpg", "菲拉斯3.jpg") }
     @{ zone = "塔纳利斯";         mapID = 1446; files = @("塔纳利斯.jpg", "塔纳利斯2.jpg") }
-    @{ zone = "奥格瑞玛";         mapID = 1454; files = @("奥格瑞玛.jpg") }
-    @{ zone = "幽暗城";           mapID = 1458; files = @("幽暗城.jpg") }
     @{ zone = "泽风岛";           mapID = 2521; files = @("泽风岛.jpg", "泽风岛2.jpg", "泽风岛3.jpg") }
+
+    # ---- 2026-11-08 补拍 trip：按色源优先级 贴图 > trip > game，把原先 7 个 game 区升级。
+    #   取图口径：wuxianwow /trip 相机「风景」模式（第一人称、人物隐藏）、3:4、24mm、t=day，
+    #   点「保存原图」导出 1536x2048 PNG（无 UI / 无地名 / 无二维码），转 JPEG 存 Gamepics。
+    #   与 11-07 那批 trip（屏幕截图裁掉工具条与中轴人物）构图口径略不同，但同为 3D 渲染源。
+    #   坐标与链接见 data/trip_sources.json 的 trip_new 段。
+    @{ zone = "阿拉希高地";       mapID = 1417; files = @("阿拉希高地-trip1.jpg");       source = "trip" }
+    @{ zone = "提瑞斯法林地";     mapID = 1420; files = @("提瑞斯法林地-trip1.jpg");     source = "trip" }
+    @{ zone = "银松森林";         mapID = 1421; files = @("银松森林-trip1.jpg");         source = "trip"; note = "原 60,40 取景点贴地糊绿，改用 50,60（坡 4°）" }
+    @{ zone = "希尔斯布莱德丘陵"; mapID = 1424; files = @("希尔斯布莱德丘陵-trip1.jpg"); source = "trip" }
+    @{ zone = "艾尔文森林";       mapID = 1429; files = @("艾尔文森林-trip1.jpg");       source = "trip" }
+    @{ zone = "西部荒野";         mapID = 1436; files = @("西部荒野-trip1.jpg");         source = "trip" }
+    @{ zone = "奥格瑞玛";         mapID = 1454; files = @("奥格瑞玛-trip1.jpg");         source = "trip"; note = "取景点在建筑上的地面，画面以红土地表为主；与旧 game 色同为橙红系" }
+
+    # 幽暗城：trip 站点的取点全部落在「提瑞斯法林地 · 洛丹伦废墟」地表，不是地下城内部，
+    # 语义不符 → 有意保留 game 色（本仓 25 区里唯一的 game 特例）。
+    @{ zone = "幽暗城";           mapID = 1458; files = @("幽暗城.jpg") }
 
     # ---- trip 来源（艾泽拉斯旅拍网页 3D 渲染, 2026-11-07 取点）：覆盖 HANDOFF §8.14.2 列的
     #      缺口 —— 四个新手区 / 四个首都 / 三个 1.60 新区。每区一个取景点（坐标与链接见
