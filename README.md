@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Interface](https://img.shields.io/badge/WoW-Retail%2012.x-orange.svg)
-![Tests](https://img.shields.io/badge/tests-131-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-155-brightgreen.svg)
 ![Lua 5.1](https://img.shields.io/badge/Lua-5.1-blue.svg)
 
 仓库：<https://github.com/easthillgu/monetcolors>
@@ -24,6 +24,25 @@
 - **永不抛错**：所有公开 API 异常时回退中性灰，保证接入方 UI 不崩。
 - **保密值安全**：受限状态下血量读不到就只关掉低血效果，绝不抛错。
 - **可扩展**：生产者可注册自定义规则 Profile。
+
+---
+
+## 🗺️ 区域环境数据（可选模块）
+
+引擎只认 `mapID → HSL`，色值从哪来由数据层决定。`MonetColorMapData-1.0.lua` 是
+**生成文件（勿手改）**，由 `data/game_palette_v1.json` 经 `tools/gen_map_env.ps1` 产出，
+覆盖 **25 个区域**；底账每条带 `source` 标签（当前 `trip` 18 / `game` 7）。
+
+色源优先级（2026-11-08 拍板）：**官方地图美术贴图 > wuxianwow/trip 旅拍 > 自己的游戏截图**。
+前一级有数据就用前一级，缺的才往下退。`data/trip_sources.json` 记每个取景点，
+`format: v1|v2` 区分出图口径（v1 屏幕截图裁剪、v2 相机原图；v2 整体 s 更高、l 更低）。
+差异落在取景点与构图的天然散布内，**不做比例校正**，结论见 `data/source_bias.json`。
+
+> 贴图覆盖层不随本库分发：官方地图贴图只有 17 个区域，由消费方（MonetUI）在自己的
+> `Libs/` 里另挂一层 `RegisterMapEnv` override。加上本库 25 区与 3 条大陆 / 世界层父链派生，
+> 该消费方最终得到 **33 个精确区域 = 贴图 17 + trip 15 + game 1**（另有 3 条父层兜底）。
+> 唯一缺口是银月城 2393（旅拍站点不覆盖）。幽暗城 1458 有意保留 game 色：
+> 旅拍取点落在洛丹伦废墟地表，不是地下城内部。
 
 ---
 
@@ -215,7 +234,7 @@ LibMonetColor-1.0.lua             核心库（单文件，惰性加载可选地�
 LibMonetColor-Anim-1.0.lua        状态染色层（玩家状态 + 颜色修饰 + 共享 ticker）
 LibMonetColor-1.0.toc             独立 addon 声明（内嵌 LibStub；LoadOnDemand）
 Libs/LibStub/LibStub.lua          内嵌 LibStub（Public Domain，勿手改）
-MonetColorMapData-1.0.lua         14 区域环境色数据模块（生成文件，勿手改）
+MonetColorMapData-1.0.lua         25 区域环境色数据模块（game + trip 混合，生成文件，勿手改）
 MonetColorBaseline.lua            v3 规则基线快照（引擎内置副本的来源，运行时不加载）
 LibMonetColor-1.0-API.md          对外接口契约（唯一真理源）
 tests/test_phase1.lua             核心算法单元测试
@@ -225,9 +244,11 @@ tests/test_libstub_order.lua      LibStub 加载顺序回归测试
 tests/test_anim_state.lua         状态染色层：取色与修饰测试
 tests/test_anim_runtime.lua       状态染色层：sink / ticker / 事件测试
 tests/test_color_tools.lua        色彩工具函数：对比度 / L* 重定位
-tools/gen_map_env.ps1             data/*.json → 地图数据 Lua 模块生成器
-tools/extract_game_palette_v1.ps1 游戏截图 → 区域调色板取色管线
-data/game_palette_v1.json         14 区域 × Top8 色样 + env（取色源数据）
+tools/gen_map_env.ps1             data/game_palette_v1.json → 地图数据 Lua 模块生成器
+tools/extract_game_palette_v1.ps1 游戏截图 / trip 照片 → 区域调色板取色管线
+data/game_palette_v1.json         25 区域 × Top8 色样 + env + source（取色底账）
+data/trip_sources.json            旅拍取点账本（format: v1|v2 + skipped 例外）
+data/source_bias.json             v1/v2 口径差对照与「不做校正」结论
 data/monet_palette_v3.json        15 幅画 × 8 色样（提取源数据）
 data/monet_red_domain_v3.json     Red/Warm 域专项色样
 Monet_Paintings/MANIFEST.md       原图清单（含尺寸与 SHA-256，原图不入库）
@@ -240,7 +261,7 @@ Monet_Paintings/MANIFEST.md       原图清单（含尺寸与 SHA-256，原图�
 
 `LibMonetColor-1.0.toc` 是**独立发布**用的声明：它先加载内嵌的 `Libs/LibStub/LibStub.lua`，再加载引擎与数据模块，所以不依赖外部 LibStub 插件。部署时把本目录改名为 `LibMonetColor-1.0` 放进 `Interface/AddOns/`（文件夹名必须与 `.toc` 同名）。`## LoadOnDemand: 1` 表示不会被自动加载，需由消费方用 `## OptionalDeps: LibMonetColor-1.0` 或 `LoadAddOn` 拉起。
 
-以 vendored 方式接入（MonetUI 当前做法）：把 `LibMonetColor-1.0.lua`、`LibMonetColor-Anim-1.0.lua`、`MonetColorMapData-1.0.lua` 和 `Libs/LibStub/LibStub.lua` 拷进消费方插件的 `Libs/`，按顺序在 `.toc` 里登记即可。
+以 vendored 方式接入（MonetUI 当前做法）：把 `LibMonetColor-1.0.lua`、`LibMonetColor-Anim-1.0.lua`、`MonetColorMapData-1.0.lua` 和 `Libs/LibStub/LibStub.lua` 拷进消费方插件的 `Libs/`，按顺序在 `.toc` 里登记即可。MonetUI 还在同目录另挂了两个 `RegisterMapEnv` 覆盖层（父链派生色 + 官方地图贴图色），加载顺序与色源优先级见其 `Libs/Libs.xml`；这两个文件属消费方，不在本仓分发。
 
 > ⚠️ 同一个客户端里**不要同时**存在"独立 addon"与"被消费方 vendored 的副本"：两份都会向 LibStub 注册同一 MAJOR，本能升级守卫会让第二份直接退出，实际生效的是加载顺序靠前的那份，另一份的缓存与事件帧白跑。二选一即可（当前 MonetUI 走的是 vendored 方式）。
 
@@ -250,10 +271,11 @@ Monet_Paintings/MANIFEST.md       原图清单（含尺寸与 SHA-256，原图�
 
 - ✅ **Phase 1** 核心算法（HSL 转换 / 莫奈规则引擎 / Delta E 缓存防抖 / 生产者 API）
 - ✅ **+ 加固** LibStub 注册、Profile 生效、按地图采样、R-01 Alpha 公式
-- ✅ **Phase 2 (T2.1)** 真实地图色彩采样：`MonetColorMapData-1.0` 数据模块（14 区域，截图取色管线产出）+ 解析链（覆盖 → 数据 → 父地图 → 回退）+ 16 项测试
+- ✅ **Phase 2 (T2.1)** 真实地图色彩采样：`MonetColorMapData-1.0` 数据模块（**25 区域**，游戏截图 + wuxianwow/trip 旅拍取色产出）+ 解析链（覆盖 → 数据 → 父地图 → 回退）+ 16 项测试
 - ✅ **1.1.0 状态染色层** `LibMonetColor-Anim-1.0`：玩家状态 → 颜色修饰（战斗增亮 / 进入战斗闪烁 / 战斗脉搏 / 低血红与加速脉搏 / 脱战降亮 / 休息冷调 / PvP / 载具 / 死亡灰化）+ 单共享 ticker + 52 项测试
 - ✅ **1.2.0 色彩工具函数** `ContrastRatio`（WCAG 对比度）/ `AtLightness`（按 CIE L\* 重定位，保色相保饱和）——纯函数，接入方自己排亮度阶梯；补的是决策日志 **R-04** 预留的口子（对比度校验不内置进主题计算），+ 24 项测试
-- 🔜 **数据覆盖** 1.60 客户端共 50 张区域图 + 6 座首都，数据表只覆盖 12 + 2：**四个新手区**（杜隆塔尔 / 莫高雷 / 泰达希尔 / 丹莫罗）与**联盟首都**全部缺席，且没有**大陆/世界层**的行（1414 / 1415 / 947）可让父链接住，未覆盖区域直落冷蓝回退
+- ✅ **数据覆盖（2026-11-08）** 底账 25 区（trip 18 / game 7）；消费方 MonetUI 再挂 17 区官方地图贴图 override 与 3 条大陆 / 世界层父链派生，最终 **33 个精确区域**（贴图 17 / trip 15 / game 1），父链断掉时回退中性灰。唯一已知缺口是银月城 2393（旅拍站点不覆盖）；官方 atlas 也只有 17 区，其余区域是「按优先级择优」而非全量统一到贴图色。
+- ✅ **2026-11-08 数据层升级（无 API 变更）** 补拍 7 区 trip v2 出图（阿拉希高地 / 提瑞斯法林地 / 银松森林 / 希尔斯布莱德丘陵 / 艾尔文森林 / 西部荒野 / 奥格瑞玛）并重生成 25 区数据；地图采样测试改为从数据模块读期望值，不再硬编码色值。7 组共 **155 项**全通过，实机 33/33 对账 PASS。
 - 🔜 **Phase 2** TestHarness 插件（T2.2）、三地图视觉验收（T2.3）
 - 🔜 **Phase 3** 打包分发（CurseForge / Wago 式独立包）
 

@@ -75,6 +75,17 @@ local function assertTrue(cond, msg)
     if not cond then error(msg or "assertion failed", 2) end
 end
 
+-- Zone values are generated from data/game_palette_v1.json -- never hard-code
+-- them here. 2026-11-08: re-shooting 7 zones from trip changed their env and
+-- broke every spot-check that carried a literal h/s/l. Read the data module
+-- instead: these tests are about GetMapEnv's resolution path, not the palette.
+local function dataEnv(mapID)
+    local MDM = LibStub("MonetColorMapData-1.0")
+    local e = MDM and MDM.MapEnv[mapID]
+    assertTrue(type(e) == "table", "data zone missing for " .. tostring(mapID))
+    return e
+end
+
 -- ============================================================================
 -- 1. Data module loading
 -- ============================================================================
@@ -120,22 +131,25 @@ test("GetMapEnv: every data zone resolves with sane values", function()
         assertTrue(type(name) == "string" and name ~= "", "name missing for " .. tostring(mapID))
         count = count + 1
     end
-    assertTrue(count >= 14, "expected at least 14 zones, got " .. count)
+    assertTrue(count >= 25, "expected at least 25 zones (2026-11-08 palette), got " .. count)
 end)
 
-test("GetMapEnv: spot-checks match game_palette_v1.json", function()
-    local h, s, l, name = LMC:GetMapEnv(1454)  -- Orgrimmar: dark red rock
-    assertNear(h, 11.5, 0.01, "Orgrimmar h")
-    assertNear(s, 0.582, 0.001, "Orgrimmar s")
-    assertNear(l, 0.234, 0.001, "Orgrimmar l")
+test("GetMapEnv: spot-checks match the generated data module", function()
+    local e = dataEnv(1454)  -- Orgrimmar (trip v2 since 2026-11-08)
+    local h, s, l, name = LMC:GetMapEnv(1454)
+    assertNear(h, e.h, 0.001, "Orgrimmar h")
+    assertNear(s, e.s, 0.001, "Orgrimmar s")
+    assertNear(l, e.l, 0.001, "Orgrimmar l")
     assertTrue(name == "奥格瑞玛", "Orgrimmar name mismatch")
 
-    h, s, l = LMC:GetMapEnv(2521)  -- Zephra's Isle: misty mauve
-    assertNear(h, 331.8, 0.01, "Zephra h")
-    assertNear(s, 0.139, 0.001, "Zephra s")
+    e = dataEnv(2521)  -- Zephra's Isle
+    h, s, l = LMC:GetMapEnv(2521)
+    assertNear(h, e.h, 0.001, "Zephra h")
+    assertNear(s, e.s, 0.001, "Zephra s")
 
-    h = LMC:GetMapEnv(1440)  -- Ashenvale: saturated green
-    assertNear(h, 149.4, 0.01, "Ashenvale h")
+    e = dataEnv(1440)  -- Ashenvale
+    h = LMC:GetMapEnv(1440)
+    assertNear(h, e.h, 0.001, "Ashenvale h")
 end)
 
 -- ============================================================================
@@ -164,7 +178,7 @@ end)
 
 test("GetMapEnv: string mapID is coerced (tolerant input)", function()
     local h, _, _, _, source = LMC:GetMapEnv("1454")
-    assertNear(h, 11.5, 0.01, "string mapID lookup")
+    assertNear(h, dataEnv(1454).h, 0.001, "string mapID lookup")
     assertTrue(source == "data", "string mapID should resolve via data")
 end)
 
@@ -199,7 +213,7 @@ test("RegisterMapEnv: override wins over data module", function()
     assertTrue(LMC:RegisterMapEnv(9999, nil, 0.1, 0.1) == false, "accepted nil h")
     LMC.overrideEnv[1454] = nil  -- restore data-module lookup
     local backH, _, _, _, backSource = LMC:GetMapEnv(1454)
-    assertNear(backH, 11.5, 0.01, "data lookup restored")
+    assertNear(backH, dataEnv(1454).h, 0.001, "data lookup restored")
     assertTrue(backSource == "data", "source restored to 'data'")
 end)
 
@@ -224,7 +238,7 @@ test("GetMapEnv: subzone map inherits parent zone env via C_Map", function()
         end,
     }
     local h, s, l, name, source = LMC:GetMapEnv(90001)
-    assertNear(h, 77.2, 0.01, "parent h")
+    assertNear(h, dataEnv(1429).h, 0.001, "parent h")
     assertTrue(name == "艾尔文森林", "parent zone name mismatch")
     assertTrue(source == "parent:data", "source should be 'parent:data'")
     _G.C_Map = nil

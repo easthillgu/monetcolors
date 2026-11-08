@@ -4,7 +4,7 @@
 > 
 > **定位**：WoW 动态环境色彩计算引擎。它不是静态的颜色查找表，而是基于"印象派（莫奈）色彩规则"的实时调色中间件，为 UI 插件提供自适应的"5+3"主题色系统。
 > 
-> **当前状态**: 核心算法已实现并加固，**45 个核心 + 14 个加固回归 + 16 个 T2.1 采样 + 4 个 LibStub 加载顺序 + 33 个状态染色 + 19 个运行时 + 24 个色彩工具函数（共 155）**全部通过。Phase 2（T2.1）已完成：`sampleEnvironmentColor()` 默认实现为基于 `MonetColorMapData-1.0` 区域数据的查表采样器（14 区域，源自游戏截图取色管线），未知地图回退中性无彩 env 并走无彩域注入路径。1.1.0 新增独立的**状态染色层** `LibMonetColor-Anim-1.0`：把玩家的战斗 / 休息 / 血量 / PvP / 载具状态翻译成颜色修饰，并用**一个共享 ticker** 驱动所有闪烁。1.2.0 新增**色彩工具函数** `ContrastRatio` / `AtLightness`：纯函数，把"量得准"这一层交给库，把"要几级阶梯"留给接入方（接入案例见 MonetUI 的 `Utils/Color.lua` 表面分层）。
+> **当前状态**: 核心算法已实现并加固，**45 个核心 + 14 个加固回归 + 16 个 T2.1 采样 + 4 个 LibStub 加载顺序 + 33 个状态染色 + 19 个运行时 + 24 个色彩工具函数（共 155）**全部通过。Phase 2（T2.1）已完成：`sampleEnvironmentColor()` 默认实现为基于 `MonetColorMapData-1.0` 区域数据的查表采样器（25 区域，游戏截图 + wuxianwow/trip 旅拍两类色源），未知地图回退中性无彩 env 并走无彩域注入路径。1.1.0 新增独立的**状态染色层** `LibMonetColor-Anim-1.0`：把玩家的战斗 / 休息 / 血量 / PvP / 载具状态翻译成颜色修饰，并用**一个共享 ticker** 驱动所有闪烁。1.2.0 新增**色彩工具函数** `ContrastRatio` / `AtLightness`：纯函数，把"量得准"这一层交给库，把"要几级阶梯"留给接入方（接入案例见 MonetUI 的 `Utils/Color.lua` 表面分层）。
 
 ---
 
@@ -218,7 +218,9 @@ MDM.MapEnv = {
 }
 ```
 
-*   **数据源**：`data/game_palette_v1.json` ← `tools/extract_game_palette_v1.ps1`（游戏截图取色管线）← `tools/gen_map_env.ps1`（生成本模块）。新增区域时重跑两条管线即可。
+*   **数据源**：`tools/extract_game_palette_v1.ps1`（游戏截图 / trip 照片 → 区域色样）→ `data/game_palette_v1.json`（**25 区**底账，每条带 `source: game|trip`）→ `tools/gen_map_env.ps1` → 本模块。新增区域时重跑这两条管线即可，**勿手改生成文件**。
+*   **色源优先级**（2026-11-08）：官方地图美术贴图 > wuxianwow/trip 旅拍 > 自己的游戏截图。本模块是「缺顶层素材时」的底表；消费方可用 `RegisterMapEnv` 挂更高优先级的覆盖层（MonetUI 挂了 17 区官方贴图色 + 3 条父链派生色）。下方解析顺序不变，覆盖层总是先命中。
+*   **口径差**：`data/trip_sources.json` 用 `format: v1|v2` 区分出图方式（屏幕截图裁剪 / 相机原图），`data/source_bias.json` 记录「差异属取景点散布、不做比例校正」的结论。
 *   **加载顺序无关**：库通过 `LibStub("MonetColorMapData-1.0", true)` 或全局别名 `LibMonetColorMapData` **惰性查找**，数据模块先于/后于库加载均可。
 *   **数据缺失安全**：数据模块不存在时库照常工作，所有未收录地图解析为 fallback env。
 
