@@ -193,4 +193,4 @@ Never publish only one side. Version numbers stay independent (library `1.x`, UI
 
 The library remains vendored inside the MonetUI zip: separate CF projects do **not** mean removing `Libs/`. Installing MonetUI does not require the standalone library; the standalone project serves other consumers. Do not install both on the same client (two copies register the same LibStub major version).
 
-State on 2026-11-15: monetcolors tag `1.3.0` and its GitHub Release exist, and the standalone zip was uploaded to project 1801984 (CurseForge file id 9625084; approval takes about 6h — never re-upload the same version). Project 1791156 is on `0.13.8`; the matching vendored `1.3.0` copies ship with the next MonetUI tag.
+State on 2026-11-15: monetcolors `1.3.0` (tag + GitHub Release + CF project 1801984, file id 9625084) and MonetUI `0.13.9` (tag + GitHub Release + CF project 1791156) were published as one synced change; both CurseForge files await about 6h approval. Never re-upload the same version. The Actions secret `CF_API_KEY` is set in this repo, so the credential guard passes on the next tag.
