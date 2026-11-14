@@ -144,7 +144,8 @@ MIT © 2026 EastHillGu. Embedded LibStub is public domain. Monet painting sample
 
 | Field | Value |
 | :--- | :--- |
-| Name | LibMonetColor-1.0 |
+| Name | lib_MonetColors |
+| CurseForge project ID | 1801984 |
 | Summary | See section 1 (one line, English) |
 | Category | Library / Plugin Libraries |
 | Game | World of Warcraft |
@@ -153,7 +154,7 @@ MIT © 2026 EastHillGu. Embedded LibStub is public domain. Monet painting sample
 | Source / project URL | <https://github.com/easthillgu/monetcolors> |
 | Primary file | `LibMonetColor-1.0.zip` (see section 5) |
 
-After the project is approved, set the repo variable `CF_PROJECT_ID` and the secret `CF_API_TOKEN` (or `CF_API_KEY`). Pushing tag `1.3.0` then packages and uploads automatically; do not re-upload the same version manually.
+The project is live: **CF project 1801984 (`lib_MonetColors`)**, first file `LibMonetColor-1.0-1.2.0.zip` uploaded manually on 2026-11-13. `.github/workflows/release.yml` pins `-p 1801984`; the only per-repository setting left is the Actions secret `CF_API_TOKEN` (or `CF_API_KEY`). A guard step now fails the job when that secret is missing, because packager @v2 otherwise skips the upload while still reporting success (this happened for tag 1.3.0). See section 6 for the two-repo / two-project release order.
 
 ## 5. Upload package
 
@@ -171,3 +172,25 @@ After the project is approved, set the repo variable `CF_PROJECT_ID` and the sec
 | `README.md` / `CHANGELOG.md` / `LICENSE` | Documentation and license |
 
 Excluded as development-only (never in a release zip): `Gamepics/` (69 MB of screenshots), `Monet_Paintings/` (62 MB of paintings + manifest), `GamePalette_v1.html` / `.png` (5.3 MB rendered output), the five intermediate palette JSONs, `data/`, `tools/*.ps1`, `tests/`, `.dev/`, `.github/`, `.vscode/`, `.opencode/`, `AGENTS.md`, `.pkgmeta`, `opencode.json`, all `*.zip`.
+
+## 6. Release topology (two repos, two CurseForge projects)
+
+Local development is kept together: MonetUI vendors the library into `MonetUI/Libs/LibMonetColor-1.0/` and `MonetUI/Libs/LibMonetColor-Anim-1.0/`, so one client reload tests both sides. Remote repositories and CurseForge projects stay separate, and are published in sync:
+
+| | Remote repo | CurseForge project | Package |
+| :--- | :--- | :--- | :--- |
+| Standalone library | `easthillgu/monetcolors` | **1801984** — lib_MonetColors | `LibMonetColor-1.0-<lib version>-forever.zip` |
+| Consumer UI | `easthillgu/MonetUI` | **1791156** — MonetUI | `MonetUI-<UI version>-forever.zip` (contains the vendored library) |
+
+Order for a library change:
+
+1. Change the library here, bump `## Version` and `MINOR` (must exceed every vendored copy), run the 7 test groups.
+2. Push `main`, then push the plain numeric tag. `.github/workflows/release.yml` uploads to 1801984 and creates the GitHub Release.
+3. Copy the two updated Lua files into `MonetUI/Libs/`, verify their `MINOR` matches the source repo, run `node tools/sync-check.js`, commit in the MonetUI repo.
+4. Bump MonetUI's TOC + CHANGELOG, push, then tag the MonetUI version; that workflow uploads to 1791156.
+
+Never publish only one side. Version numbers stay independent (library `1.x`, UI `0.13.x`); they are aligned by belonging to the same change, not by sharing a number. A green Actions job is not proof of an upload — check the Files page of the matching project (approval takes about 6h). Never re-tag or manually re-upload the same version.
+
+The library remains vendored inside the MonetUI zip: separate CF projects do **not** mean removing `Libs/`. Installing MonetUI does not require the standalone library; the standalone project serves other consumers. Do not install both on the same client (two copies register the same LibStub major version).
+
+State on 2026-11-15: monetcolors tag `1.3.0` and its GitHub Release exist, and the standalone zip was uploaded to project 1801984 (CurseForge file id 9625084; approval takes about 6h — never re-upload the same version). Project 1791156 is on `0.13.8`; the matching vendored `1.3.0` copies ship with the next MonetUI tag.
