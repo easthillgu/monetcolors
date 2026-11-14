@@ -39,6 +39,7 @@ release/
 luac.out
 
 # ---- 编辑器 / 系统 ----
+.workbuddy/
 .idea/
 *.swp
 *.swo

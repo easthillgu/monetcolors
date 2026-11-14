@@ -1,5 +1,5 @@
 -- LibMonetColor-1.0.lua
--- Monet Color Engine v1.2.0
+-- Monet Color Engine v1.3.0
 -- A WoW dynamic environment color computation engine based on Impressionist color rules.
 -- Provides adaptive "5+3" theme colors for UI plugins.
 --
@@ -7,9 +7,9 @@
 -- Optional: CallbackHandler-1.0 (a built-in registry is used when absent)
 -- Optional data: MonetColorMapData-1.0 (mapID -> environment color table)
 -- License: MIT
--- Version: MAJOR = "LibMonetColor-1.0", MINOR = 10003
+-- Version: MAJOR = "LibMonetColor-1.0", MINOR = 10005
 
-local MAJOR, MINOR = "LibMonetColor-1.0", 10003
+local MAJOR, MINOR = "LibMonetColor-1.0", 10005
 
 -- Only a real LibStub (a table exposing NewLibrary) counts. A bare function
 -- under _G.LibStub is our own standalone shim from a previous load, and must
@@ -304,12 +304,16 @@ local DEFAULT_MONET_RULES = {
     },
 
     -- Neutral (Monet grey for text/dividers). `saturation` is clamped to the
-    -- documented "< 0.05" contract ceiling; lightness tracks envL between
-    -- lMin and lMin + lRange.
+    -- documented "< 0.05" contract ceiling; lightness runs AGAINST the
+    -- environment (dark zone -> bright text, bright zone -> dark text),
+    -- clamped to [lMin, lMax]. Readability-first rule (2026-11-02): the old
+    -- tracking formula (0.35 + envL * 0.30) let text lightness follow the
+    -- environment and drowned at both extremes -- contrast is the text's job,
+    -- harmony comes from the low saturation, not from chasing envL.
     neutral = {
         saturation = 0.02,
-        lMin       = 0.35,
-        lRange     = 0.30,
+        lMin       = 0.25,
+        lMax       = 0.85,
     },
 }
 
@@ -474,6 +478,11 @@ end
 
 --- Compute Neutral (Monet-style neutral gray for text/dividers).
 -- Reads rules.neutral; saturation is clamped to 0.05 to hold the contract.
+-- Lightness is the INVERSE of the environment (mirrored around 0.5, then
+-- clamped to [lMin, lMax]): dark environment -> bright text, bright
+-- environment -> dark text. Text must stay readable first (see the rules
+-- comment for the 2026-11-02 readability-first decision); harmony is carried
+-- by the near-zero saturation and the shared env hue, not by tracking envL.
 function LMC.ComputeNeutral(envH, envS, envL, rules)
     rules = rules or DEFAULT_MONET_RULES
 
@@ -484,8 +493,8 @@ function LMC.ComputeNeutral(envH, envS, envL, rules)
     -- wraps it, so it does not need clamping here.
     local neutralH = envH or 0
     local neutralS = math.max(0, math.min(0.05, nr.saturation or 0.02))
-    local neutralL = (nr.lMin or 0.35) + envL * (nr.lRange or 0.30)
-    neutralL = math.max(0, math.min(1, neutralL))
+    local neutralL = 1 - envL
+    neutralL = math.max(nr.lMin or 0.25, math.min(nr.lMax or 0.85, neutralL))
 
     local r, g, b = LMC.HSLToRGB(neutralH, neutralS, neutralL)
     return r, g, b

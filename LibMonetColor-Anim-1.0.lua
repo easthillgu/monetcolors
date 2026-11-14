@@ -1,5 +1,5 @@
 -- LibMonetColor-Anim-1.0.lua
--- Monet Animation & State Layer v1.0.0
+-- Monet Animation & State Layer v1.1.0 (shipped with LibMonetColor 1.3.0)
 --
 -- A companion library for LibMonetColor-1.0.  It turns the *player's* runtime
 -- state (combat / resting / health / PvP / vehicle) into colour modifiers and
@@ -17,7 +17,7 @@
 -- Optional: CallbackHandler-1.0 (a built-in registry is used when absent)
 -- License: MIT
 
-local MAJOR, MINOR = "LibMonetColor-Anim-1.0", 10000
+local MAJOR, MINOR = "LibMonetColor-Anim-1.0", 10001
 
 -- ============================================================================
 -- SECTION 1: Bootstrap
@@ -73,6 +73,9 @@ local eventFrame
 local tracking = false
 local coreSubscribed = false
 local coreHandler
+-- Optional consumer-side palette (1.3.0).  When set, slot names are resolved
+-- through it before the engine cache is consulted; see SetBaseColorProvider.
+local baseColorProvider
 local refreshAll
 local ensureTicker
 local subscribeCore
@@ -669,6 +672,23 @@ local function getBaseColor(base)
                clamp(base.a == nil and 1 or base.a, 0, 1)
     end
     local key = (type(base) == "string" and base) or "edge"
+
+    -- 1.3.0: a consumer may have post-processed the engine palette (lightness
+    -- ladder, contrast correction, theme override).  Ask it first so state
+    -- modifiers start from the very same colours the rest of its UI paints.
+    -- A nil answer means "not my slot" and is a normal fallback, not an error.
+    -- Explicit colour tables return above, so per-sink overrides still win.
+    if baseColorProvider then
+        local ok, pr, pg, pb, pa = pcall(baseColorProvider, key)
+        if not ok then
+            warn("base colour provider failed: " .. tostring(pr))
+        elseif type(pr) == "number" and type(pg) == "number" and type(pb) == "number" then
+            local alpha = (type(pa) == "number") and pa or 1
+            return clamp(pr, 0, 1), clamp(pg, 0, 1), clamp(pb, 0, 1),
+                   clamp(alpha, 0, 1)
+        end
+    end
+
     local core = getCore()
     if core then
         if key == "ambient" then
@@ -1101,6 +1121,29 @@ end
 --- The active style table (read-only).
 function ANIM:GetStyle()
     return ANIM.style
+end
+
+--- Supply the palette that state modifiers start from (1.3.0).
+-- The provider receives a slot name and answers r, g, b, a in [0,1]; a missing
+-- alpha means 1.  Answering nil, throwing, or clearing the provider all fall
+-- back to the colour engine's cache, so registering one is always optional and
+-- a broken consumer cannot take the others down.  Registering / clearing also
+-- repaints every sink immediately.
+-- @param provider function|nil
+-- @return boolean success
+function ANIM:SetBaseColorProvider(provider)
+    if provider ~= nil and type(provider) ~= "function" then
+        warn("SetBaseColorProvider: expected a function or nil")
+        return false
+    end
+    baseColorProvider = provider
+    refreshAll(false)
+    return true
+end
+
+--- The currently registered provider (read-only; nil when none).
+function ANIM:GetBaseColorProvider()
+    return baseColorProvider
 end
 
 --- Merge a partial style into the active one and repaint everything.

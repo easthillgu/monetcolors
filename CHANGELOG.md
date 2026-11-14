@@ -2,6 +2,28 @@
 
 版本号与 `LibMonetColor-1.0.toc` 的 `## Version` 保持一致；对外 API 在 1.x 内向后兼容。
 
+## 1.3.0 — 2026-11-15
+
+**状态层可消费「接入方加工过的色板」+ 回灌一处版本分叉**
+
+- `Anim:SetBaseColorProvider(fn)` / `Anim:GetBaseColorProvider()`（新增）：
+  状态层原本直接从核心引擎缓存取 `edge` / `ambient` / `highlight` / `neutral`，接入方若在
+  自己的策略层做过亮度阶梯、对比度纠偏或主题覆盖，那批加工色到不了状态层。现在可注入
+  `function(key) -> r, g, b, a`，注册 / 清除立即重绘所有 sink；返回 `nil`、抛错或未注册时
+  一律回落引擎缓存，显式 `{r,g,b,a}` 的 sink 基色优先级更高。仍是「库给原语、策略归消费方」
+  （R-04），**不改变对比度归消费方这一分工**。未注册时行为与 1.2.x 完全一致，1.x 内向后兼容。
+- **回灌 11-02 分叉**：`ComputeNeutral` 的「可读性优先」规则（明度 = `1 - envL`，钳在
+  `lMin 0.25 / lMax 0.85`，替代原先跟随环境的 `lMin + envL*lRange`）此前只落在 MonetUI 的
+  vendored 副本里，源仓一直停在旧公式、版本号也没跟上。本版把它收回源仓，
+  两仓 core 重新一致。
+- 版本：`## Version` 1.2.0 → **1.3.0**；core `MINOR` 10003 → **10005**（10004 是那次分叉在
+  vendored 副本里占用的号）；Anim `MINOR` 10000 → **10001**（状态层自身 v1.1.0）。
+- 测试：`test_anim_runtime` 补 7 项 provider 用例（注入 / 回落 / 抛错隔离 / 显式基色优先 /
+  注册与清除重绘 / 参数校验），`test_hardening` 把过时的 `lRange` 断言改成钳制边界断言并补
+  1 项逆明度用例。7 组共 **163 项**全通过。
+- 发布链路：`.github/workflows/release.yml`、`.pkgmeta`、`CURSEFORGE.md` 首次纳入版本库
+  （此前只在本地），tag 触发打包上传才生效。
+
 ## 数据层 — 2026-11-08（引擎 API 与 MINOR 均未变更）
 
 - `data/game_palette_v1.json` 扩到 **25 区**，每条带 `source`（当前 `trip` 18 / `game` 7）；`MonetColorMapData-1.0.lua` 由 `gen_map_env.ps1` 重生成，数值随底账。

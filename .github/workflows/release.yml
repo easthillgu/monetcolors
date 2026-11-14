@@ -1,0 +1,49 @@
+name: Release to CurseForge
+
+# Tag with a plain version number (e.g. 1.3.0) to match the TOC Version.
+# A "v" prefix is accepted but shows up verbatim in the zip name and the
+# CurseForge display name (the guard strips it for the TOC check).
+on:
+  push:
+    tags:
+      - 'v*'
+      - '[0-9]*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The TOC keeps a static Version (not @project-version@) so local installs
+      # and announcements stay meaningful. Guard against forgetting to bump it.
+      - name: Guard - TOC version must match the tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          TOC=$(sed -n 's/^## Version:[[:space:]]*//p' LibMonetColor-1.0.toc | head -1 | tr -d '\r')
+          echo "tag=$TAG toc=$TOC"
+          if [ "$TOC" != "$TAG" ]; then
+            echo "::error::LibMonetColor-1.0.toc Version ($TOC) does not match tag ($TAG). Bump the TOC before tagging."
+            exit 1
+          fi
+
+      - name: Package, create GitHub Release, upload to CurseForge
+        uses: BigWigsMods/packager@v2
+        with:
+          # -p  project id, read from the repo variable CF_PROJECT_ID
+          #     (Settings -> Secrets and variables -> Variables). Create the
+          #     CurseForge project for monetcolors first, then set this number.
+          # -g  pin the Forever game version 1.60.1
+          # -n  "<zip name>:<CurseForge display name>"
+          args: '-p ${{ vars.CF_PROJECT_ID }} -g 1.60.1 -n "{package-name}-{project-version}-forever:{project-version}"'
+        env:
+          # Author Portal Upload API Token. Both secret names are accepted so an
+          # already-created secret named CF_API_KEY keeps working.
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN || secrets.CF_API_KEY }}
+          GH_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}

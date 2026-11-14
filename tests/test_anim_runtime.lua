@@ -187,6 +187,9 @@ local function closeOpenSinks()
         pcall(function() handle:Unregister() end)
     end
     openHandles = {}
+    -- 1.3.0: the palette provider is singleton state too.  Clear it so a
+    -- failing test cannot leak its palette into the next one.
+    pcall(function() ANIM:SetBaseColorProvider(nil) end)
 end
 
 local function assertNear(actual, expected, tol, msg)
@@ -477,6 +480,96 @@ test("Callbacks: unregistering stops the delivery", function()
     frame:Dispatch("UNIT_HEALTH", "player")
     assertTrue(seen == 0, "the callback fired after UnregisterCallback")
     ANIM:UnregisterAllCallbacks()
+end)
+
+-- ============================================================================
+-- 9. Base colour provider (1.3.0)
+-- ============================================================================
+
+-- All state modifiers off, so GetColor returns the resolved base colour exactly.
+local NO_MODS = {
+    combat = false, ooc = false, rest = false, lowHealth = false,
+    pvp = false, vehicle = false, dead = false,
+}
+
+test("Base provider: GetColor starts from the consumer palette", function()
+    resetMock()
+    local seen
+    ANIM:SetBaseColorProvider(function(key)
+        seen = key
+        return 0.91, 0.12, 0.34, 0.77
+    end)
+    local r, g, b, a = ANIM:GetColor("edge", 0, NO_MODS)
+    assertTrue(seen == "edge", "provider did not receive the slot name, got " .. tostring(seen))
+    assertNear(r, 0.91, 0.001, "provider r")
+    assertNear(g, 0.12, 0.001, "provider g")
+    assertNear(b, 0.34, 0.001, "provider b")
+    assertNear(a, 0.77, 0.001, "provider a")
+end)
+
+test("Base provider: a missing alpha defaults to 1", function()
+    resetMock()
+    ANIM:SetBaseColorProvider(function() return 0.2, 0.3, 0.4 end)
+    local r, g, b, a = ANIM:GetColor("ambient", 0, NO_MODS)
+    assertNear(r, 0.2, 0.001, "provider r")
+    assertNear(g, 0.3, 0.001, "provider g")
+    assertNear(b, 0.4, 0.001, "provider b")
+    assertNear(a, 1, 0.001, "default alpha")
+end)
+
+test("Base provider: an explicit table base still wins", function()
+    resetMock()
+    ANIM:SetBaseColorProvider(function() return 0.9, 0.1, 0.1, 1 end)
+    local r, g, b, a = ANIM:GetColor({ r = 0.1, g = 0.2, b = 0.3, a = 0.4 }, 0, NO_MODS)
+    assertNear(r, 0.1, 0.001, "table r")
+    assertNear(g, 0.2, 0.001, "table g")
+    assertNear(b, 0.3, 0.001, "table b")
+    assertNear(a, 0.4, 0.001, "table a")
+end)
+
+test("Base provider: a nil answer falls back to the engine", function()
+    resetMock()
+    local er, eg, eb, ea = ANIM:GetColor("edge", 0, NO_MODS)
+    ANIM:SetBaseColorProvider(function() return nil end)
+    local r, g, b, a = ANIM:GetColor("edge", 0, NO_MODS)
+    assertNear(r, er, 0.001, "engine fallback r")
+    assertNear(g, eg, 0.001, "engine fallback g")
+    assertNear(b, eb, 0.001, "engine fallback b")
+    assertNear(a, ea, 0.001, "engine fallback a")
+end)
+
+test("Base provider: a throwing provider falls back without raising", function()
+    resetMock()
+    local er = ANIM:GetColor("edge", 0, NO_MODS)
+    ANIM:SetBaseColorProvider(function() error("boom") end)
+    local ok, r = pcall(function() return ANIM:GetColor("edge", 0, NO_MODS) end)
+    assertTrue(ok, "GetColor must never throw")
+    assertNear(r, er, 0.001, "engine fallback after error")
+end)
+
+test("Base provider: register and clear repaint every sink", function()
+    resetMock()
+    local calls = {}
+    local handle = registerSink(function(r) calls[#calls + 1] = r end, { base = "edge" })
+    local before = calls[#calls]
+    ANIM:SetBaseColorProvider(function() return 0.95, 0.05, 0.05, 1 end)
+    assertTrue(#calls >= 2, "setting a provider did not repaint")
+    assertTrue(math.abs(calls[#calls] - before) > 0.1, "the sink still shows the engine colour")
+    ANIM:SetBaseColorProvider(nil)
+    assertTrue(#calls >= 3, "clearing the provider did not repaint")
+    assertNear(calls[#calls], before, 0.001, "clearing must restore the engine colour")
+    handle:Unregister()
+end)
+
+test("Base provider: getter, invalid argument and clearing", function()
+    resetMock()
+    assertFalse(ANIM:SetBaseColorProvider(123), "a non-function must be rejected")
+    assertTrue(ANIM:GetBaseColorProvider() == nil, "rejecting must not install anything")
+    local fn = function() return 0.2, 0.3, 0.4 end
+    assertTrue(ANIM:SetBaseColorProvider(fn), "registration failed")
+    assertTrue(ANIM:GetBaseColorProvider() == fn, "getter returned the wrong function")
+    assertTrue(ANIM:SetBaseColorProvider(nil), "clearing failed")
+    assertTrue(ANIM:GetBaseColorProvider() == nil, "clearing left a provider behind")
 end)
 
 -- ============================================================================

@@ -1,10 +1,10 @@
 # 📖 LibMonetColor-1.0 API Reference
 
-> **版本**: 1.2.0 (Phase 1 核心算法 + 加固 + Phase 2 T2.1 地图采样 + 状态染色层 `LibMonetColor-Anim-1.0` + 色彩工具函数) | **协议**: MIT | **依赖**: `LibStub`（随包内嵌于 `Libs/LibStub/`，或由接入方提供） | **可选**: `CallbackHandler-1.0`（缺失时使用库内置回调注册表） | **可选数据**: `MonetColorMapData-1.0`
+> **版本**: 1.3.0 (Phase 1 核心算法 + 加固 + Phase 2 T2.1 地图采样 + 状态染色层 `LibMonetColor-Anim-1.0` + 色彩工具函数 + 状态层基色提供者) | **协议**: MIT | **依赖**: `LibStub`（随包内嵌于 `Libs/LibStub/`，或由接入方提供） | **可选**: `CallbackHandler-1.0`（缺失时使用库内置回调注册表） | **可选数据**: `MonetColorMapData-1.0`
 > 
 > **定位**：WoW 动态环境色彩计算引擎。它不是静态的颜色查找表，而是基于"印象派（莫奈）色彩规则"的实时调色中间件，为 UI 插件提供自适应的"5+3"主题色系统。
 > 
-> **当前状态**: 核心算法已实现并加固，**45 个核心 + 14 个加固回归 + 16 个 T2.1 采样 + 4 个 LibStub 加载顺序 + 33 个状态染色 + 19 个运行时 + 24 个色彩工具函数（共 155）**全部通过。Phase 2（T2.1）已完成：`sampleEnvironmentColor()` 默认实现为基于 `MonetColorMapData-1.0` 区域数据的查表采样器（25 区域，游戏截图 + wuxianwow/trip 旅拍两类色源），未知地图回退中性无彩 env 并走无彩域注入路径。1.1.0 新增独立的**状态染色层** `LibMonetColor-Anim-1.0`：把玩家的战斗 / 休息 / 血量 / PvP / 载具状态翻译成颜色修饰，并用**一个共享 ticker** 驱动所有闪烁。1.2.0 新增**色彩工具函数** `ContrastRatio` / `AtLightness`：纯函数，把"量得准"这一层交给库，把"要几级阶梯"留给接入方（接入案例见 MonetUI 的 `Utils/Color.lua` 表面分层）。
+> **当前状态**: 核心算法已实现并加固，**45 个核心 + 15 个加固回归 + 16 个 T2.1 采样 + 4 个 LibStub 加载顺序 + 33 个状态染色 + 26 个运行时 + 24 个色彩工具函数（共 163）**全部通过。1.3.0 新增状态层**基色提供者** `SetBaseColorProvider / GetBaseColorProvider`：接入方可把自己在策略层加工过的色板（亮度阶梯、对比度纠偏）注入状态层，让边框与其它控件同源；未注册时行为与 1.2.x 完全一致。Phase 2（T2.1）已完成：`sampleEnvironmentColor()` 默认实现为基于 `MonetColorMapData-1.0` 区域数据的查表采样器（25 区域，游戏截图 + wuxianwow/trip 旅拍两类色源），未知地图回退中性无彩 env 并走无彩域注入路径。1.1.0 新增独立的**状态染色层** `LibMonetColor-Anim-1.0`：把玩家的战斗 / 休息 / 血量 / PvP / 载具状态翻译成颜色修饰，并用**一个共享 ticker** 驱动所有闪烁。1.2.0 新增**色彩工具函数** `ContrastRatio` / `AtLightness`：纯函数，把"量得准"这一层交给库，把"要几级阶梯"留给接入方（接入案例见 MonetUI 的 `Utils/Color.lua` 表面分层）。
 
 ---
 
@@ -332,6 +332,33 @@ local r, g, b, a = Anim:GetColor("edge", now)       -- 指定时刻（确定性�
 local r, g, b, a = Anim:GetColor("ambient", nil, { lowHealth = false })  -- 单次调用覆盖修饰开关
 local r, g, b, a = Anim:GetColor({ r = .2, g = .2, b = .2, a = .9 })      -- 任意自定义基色
 ```
+
+### 基色提供者（1.3.0 新增，可选）
+
+状态层默认直接从色彩引擎缓存里取 slot 色。若接入方在自己的策略层做过加工（亮度阶梯、
+对比度纠偏、主题覆盖），可用 `SetBaseColorProvider` 把**成品色板**注入状态层，让边框 / 条底 /
+装饰线与其他控件同源，不必每个 sink 各写一遍 `{r,g,b,a}`。
+
+```lua
+-- @param provider function|nil  function(key) -> r, g, b, a   （a 省略按 1）
+--                              key = "edge" / "ambient" / "highlight" / "neutral"
+--                              返回 nil / 抛错时自动回落到引擎缓存
+-- @return boolean success
+Anim:SetBaseColorProvider(function(key)
+    local c = MyPalette[key]
+    if not c then return nil end
+    return c.r, c.g, c.b, c.a
+end)
+
+Anim:GetBaseColorProvider()    -- 读回当前函数（nil = 未注册）
+Anim:SetBaseColorProvider(nil) -- 清除，立即重绘所有 sink
+```
+
+- 只对 **slot 名**生效；sink 里显式传 `{r,g,b,a}` 或返回颜色表的 `base` 函数优先级更高，不会被覆盖。
+- 注册 / 清除会立即重绘所有 sink；此后每次状态变化、引擎 `OnThemeRefreshed`、以及 `GetColor()`
+  都会重新调用 provider，所以策略层刷新后**无需重新注册**。
+- 未注册时行为与 1.2.x 完全一致，**1.x 内向后兼容**。provider 抛错只走 30 秒冷却警告并回落引擎，
+  不会中断其它消费者；这也是「库给原语、策略归消费方」（R-04）在状态层的延伸。
 
 ### GetPlayerState
 

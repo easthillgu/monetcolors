@@ -227,12 +227,32 @@ test("Profile: rules.highlight reshapes the highlight wash", function()
     assertNear(l, 0.5, 0.01, "lOffset=0 keeps envL")
 end)
 
-test("Profile: rules.neutral is honoured but saturation stays under 0.05", function()
+test("Profile: rules.neutral clamps the inverse lightness; saturation stays under 0.05", function()
     local LMC = _G.LibMonetColor
-    local r, g, b = LMC.ComputeNeutral(0, 0, 0.5, {neutral = {saturation = 0.9, lMin = 0.2, lRange = 0}})
+    -- Readability-first rule (2026-11-02): neutralL = 1 - envL, clamped to
+    -- [lMin, lMax].  lMin / lMax are clamp bounds, not a formula start, so the
+    -- old "lMin + envL * lRange" assertion no longer describes the contract.
+    local r, g, b = LMC.ComputeNeutral(0, 0, 0.95,
+        {neutral = {saturation = 0.9, lMin = 0.2, lMax = 0.85}})
     local _, s, l = LMC.RGBToHSL(r, g, b)
     assertTrue(s <= 0.05 + 1e-9, "neutral saturation must be clamped to the 0.05 contract")
-    assertNear(l, 0.2, 0.01, "rules.neutral.lMin should be honoured")
+    assertNear(l, 0.2, 0.01, "rules.neutral.lMin must clamp the inverse lightness")
+
+    local r2, g2, b2 = LMC.ComputeNeutral(0, 0, 0.05,
+        {neutral = {saturation = 0.9, lMin = 0.2, lMax = 0.85}})
+    local _, _, l2 = LMC.RGBToHSL(r2, g2, b2)
+    assertNear(l2, 0.85, 0.01, "rules.neutral.lMax must clamp the inverse lightness")
+end)
+
+test("Neutral: lightness runs against the environment (readability-first)", function()
+    local LMC = _G.LibMonetColor
+    local dr, dg, db = LMC.ComputeNeutral(0, 0, 0.15)
+    local br, bg, bb = LMC.ComputeNeutral(0, 0, 0.85)
+    local _, _, dl = LMC.RGBToHSL(dr, dg, db)
+    local _, _, bl = LMC.RGBToHSL(br, bg, bb)
+    assertTrue(dl > bl, "a dark zone must produce brighter text than a bright zone")
+    assertNear(dl, 0.85, 0.01, "dark zone lightness")
+    assertNear(bl, 0.25, 0.01, "bright zone lightness hits the default lMin")
 end)
 
 -- ============================================================================

@@ -1,0 +1,36 @@
+# BigWigsMods/packager metadata -- CurseForge project <CF_PROJECT_ID> (LibMonetColor-1.0 / monetcolors).
+# Shipping set = LibMonetColor-1.0.toc + *.lua + Libs + README.md + LICENSE
+#              + CHANGELOG.md + LibMonetColor-1.0-API.md.
+# Everything below is development-only and must never reach a release zip.
+package-as: LibMonetColor-1.0
+
+ignore:
+  - .github
+  - .gitattributes
+  - .gitignore
+  - .opencode
+  - .pkgmeta
+  - .vscode
+  - .dev
+  - AGENTS.md
+  - opencode.json
+  - Gamepics
+  - Monet_Paintings
+  - data
+  - tools
+  - tests
+  - GamePalette_v1.html
+  - GamePalette_v1.png
+  - monet_hue_domains.json
+  - monet_palette_clean.json
+  - monet_palette_raw.json
+  - monet_palette_v2.json
+  - monet_red_domain.json
+  - "*.zip"
+  - "*.tar.gz"
+  - "*.local"
+  - "*.local.lua"
+
+# Curated changelog instead of an auto-generated dump of every commit.
+# Update CHANGELOG.md before tagging a release.
+manual-changelog: CHANGELOG.md

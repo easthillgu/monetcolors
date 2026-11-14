@@ -123,6 +123,19 @@ end, { base = "ambient", modifiers = { lowHealth = false } })
 local r, g, b, a = Anim:GetColor("neutral")
 ```
 
+若接入方在自己的策略层加工过色板（亮度阶梯 / 对比度纠偏 / 主题覆盖），用 **1.3.0 的基色提供者**
+把成品色注入状态层，边框就和其它控件同源，不必每个 sink 各写一遍颜色表：
+
+```lua
+Anim:SetBaseColorProvider(function(key)
+    local c = MyPalette[key]       -- "edge" / "ambient" / "highlight" / "neutral"
+    if not c then return nil end   -- nil / 抛错 → 自动回落引擎缓存
+    return c.r, c.g, c.b, c.a
+end)
+```
+
+未注册时行为与 1.2.x 完全一致；库仍然只给原语与修饰，**对比度策略归消费方**（R-04）。
+
 | 文件 | 职责 |
 | :--- | :--- |
 | `LibMonetColor-1.0.lua` | 纯色彩引擎（环境色 / 4 个色彩槽） |
@@ -276,6 +289,7 @@ Monet_Paintings/MANIFEST.md       原图清单（含尺寸与 SHA-256，原图�
 - ✅ **1.2.0 色彩工具函数** `ContrastRatio`（WCAG 对比度）/ `AtLightness`（按 CIE L\* 重定位，保色相保饱和）——纯函数，接入方自己排亮度阶梯；补的是决策日志 **R-04** 预留的口子（对比度校验不内置进主题计算），+ 24 项测试
 - ✅ **数据覆盖（2026-11-08）** 底账 25 区（trip 18 / game 7）；消费方 MonetUI 再挂 17 区官方地图贴图 override 与 3 条大陆 / 世界层父链派生，最终 **33 个精确区域**（贴图 17 / trip 15 / game 1），父链断掉时回退中性灰。唯一已知缺口是银月城 2393（旅拍站点不覆盖）；官方 atlas 也只有 17 区，其余区域是「按优先级择优」而非全量统一到贴图色。
 - ✅ **2026-11-08 数据层升级（无 API 变更）** 补拍 7 区 trip v2 出图（阿拉希高地 / 提瑞斯法林地 / 银松森林 / 希尔斯布莱德丘陵 / 艾尔文森林 / 西部荒野 / 奥格瑞玛）并重生成 25 区数据；地图采样测试改为从数据模块读期望值，不再硬编码色值。7 组共 **155 项**全通过，实机 33/33 对账 PASS。
+- ✅ **1.3.0 基色提供者 + 回灌分叉** `SetBaseColorProvider / GetBaseColorProvider` 让状态层从接入方加工过的色板取基色；`ComputeNeutral` 的「明度逆环境」规则从 MonetUI 的 vendored 副本回灌源仓，两仓 core 重新一致。7 组共 **163 项**全通过。
 - 🔜 **Phase 2** TestHarness 插件（T2.2）、三地图视觉验收（T2.3）
 - 🔜 **Phase 3** 打包分发（CurseForge / Wago 式独立包）
 
